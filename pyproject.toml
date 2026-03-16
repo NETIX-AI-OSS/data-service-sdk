@@ -1,0 +1,43 @@
+[project]
+name = "data-service-sdk"
+description = "Python SDK for data-service processing: input evaluation, subscription consumption, output routing, worker deployment, and Redis timeseries-backed state."
+version = "1.0.0"
+readme = "README.md"
+requires-python = ">=3.14"
+keywords = ["data-service", "kafka", "redis", "timeseries", "mqtt", "kubernetes"]
+classifiers = ["Programming Language :: Python :: 3"]
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+    "transitions>=0.9.0",
+    "redis[hiredis]>=5.0.1",
+    "kafka-python>=2.0.2",
+    "sqlalchemy>=2.0.30",
+    "kubernetes>=28.1.0",
+    "paho-mqtt>=1.6.1",
+    "requests>=2.31.0",
+    "k8s-utils-py @ git+https://github.com/NETIX-AI-OSS/k8s-utils-py.git@v1.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+    "mypy>=1.10.0",
+    "types-requests>=2.32.0.20241206",
+    "pre-commit>=4.3.0",
+    "ruff>=0.14.0",
+    "pylint>=3.3.0",
+    "prospector>=1.17.3",
+    "pytest>=9.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.black]
+line-length = 120
+
+[tool.pycodestyle]
+max-line-length = 120
+ignore = ["E203", "W503"]
+
+[tool.setuptools.packages.find]
+include = ["framework*", "data_service_sdk*"]
