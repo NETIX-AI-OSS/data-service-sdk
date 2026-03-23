@@ -129,6 +129,7 @@ def _ensure_paho() -> None:
     except Exception:
         paho_module: Any = types.ModuleType("paho")
         mqtt_module: Any = types.ModuleType("paho.mqtt")
+        client_module: Any = types.ModuleType("paho.mqtt.client")
         subscribe_module: Any = types.ModuleType("paho.mqtt.subscribe")
         publish_module: Any = types.ModuleType("paho.mqtt.publish")
 
@@ -138,13 +139,62 @@ def _ensure_paho() -> None:
         def _single(*_args: Any, **_kwargs: Any) -> Any:
             return None
 
+        class DummyClient:
+            def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+                self.on_connect = None
+                self.on_disconnect = None
+                self.on_message = None
+
+            def enable_logger(self, *_args: Any, **_kwargs: Any) -> None:
+                return None
+
+            def username_pw_set(self, *_args: Any, **_kwargs: Any) -> None:
+                return None
+
+            def reconnect_delay_set(self, *_args: Any, **_kwargs: Any) -> None:
+                return None
+
+            def connect(self, *_args: Any, **_kwargs: Any) -> int:
+                return 0
+
+            def reconnect(self) -> int:
+                return 0
+
+            def loop(self, *_args: Any, **_kwargs: Any) -> int:
+                return 0
+
+            def subscribe(self, *_args: Any, **_kwargs: Any) -> tuple[int, int]:
+                return 0, 1
+
+            def disconnect(self, *_args: Any, **_kwargs: Any) -> int:
+                return 0
+
+        class CallbackAPIVersion:
+            VERSION2 = 2
+
+        class ConnectFlags(tuple):
+            session_present = False
+
+        client_module.Client = DummyClient
+        client_module.CallbackAPIVersion = CallbackAPIVersion
+        client_module.ConnectFlags = ConnectFlags
+        client_module.MQTTv311 = 4
+        client_module.MQTT_ERR_SUCCESS = 0
+
+        def _error_string(code: Any) -> str:
+            return str(code)
+
+        client_module.error_string = _error_string
+
         subscribe_module.simple = _simple
         publish_module.single = _single
         mqtt_module.subscribe = subscribe_module
         mqtt_module.publish = publish_module
+        mqtt_module.client = client_module
 
         sys.modules["paho"] = paho_module
         sys.modules["paho.mqtt"] = mqtt_module
+        sys.modules["paho.mqtt.client"] = client_module
         sys.modules["paho.mqtt.subscribe"] = subscribe_module
         sys.modules["paho.mqtt.publish"] = publish_module
 

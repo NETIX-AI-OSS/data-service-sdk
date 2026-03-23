@@ -46,6 +46,8 @@ controller = Factory.get_subscription_controller(
 - Factory uses string type values (`"1"` for Kafka, `"2"` for MQTT).
 - Unknown type returns `None`; caller should validate before use.
 - Factory includes fallback defaults for missing config keys; explicit configs are preferred in production.
+- Kafka creates one `KafkaConsumer` during `init_consumer(...)` and reuses it for the consume loop.
+- MQTT uses one long-lived client per handler instance and only subscribes when a new broker session is established.
 
 ## Related Links
 - [Handler Utilities](utils.md)

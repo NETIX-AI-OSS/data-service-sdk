@@ -199,6 +199,39 @@ def test_kafka_handler_consume_loop(monkeypatch: pytest.MonkeyPatch) -> None:
         next(gen)
 
 
+def test_kafka_handler_consume_reuses_single_consumer_instance(monkeypatch: pytest.MonkeyPatch) -> None:
+    consumer = DummyConsumer(
+        [
+            make_dummy_message(1, value=b'{"offset": 1}', topic="loop-topic"),
+            make_dummy_message(2, value=b'{"offset": 2}', topic="loop-topic"),
+        ]
+    )
+    calls: List[tuple[Any, Any]] = []
+
+    def fake_consumer(*args: Any, **kwargs: Any) -> DummyConsumer:
+        calls.append((args, kwargs))
+        return consumer
+
+    monkeypatch.setattr(kafka_handler, "KafkaConsumer", fake_consumer)
+
+    handler = kafka_handler.KafkaHandler()
+    handler.init_consumer(
+        topic="t",
+        kafka_bootstrap_servers="b",
+        kafka_ts_group_id="g",
+        kafka_ts_offset_reset="earliest",
+        kafka_ts_auto_commit=True,
+        polling_interval_secs=0.0,
+    )
+
+    gen = handler.consume()
+    first = next(gen)
+    second = next(gen)
+    assert first["data"] == {"offset": 1}
+    assert second["data"] == {"offset": 2}
+    assert len(calls) == 1
+
+
 def test_kafka_handler_consume_requires_init() -> None:
     handler = kafka_handler.KafkaHandler()
 
