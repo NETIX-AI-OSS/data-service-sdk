@@ -13,7 +13,7 @@ from data_service_sdk.handlers.output.manager import OutputManager
 from data_service_sdk.worker.deployment.deployment_handler import WorkerHandler
 ```
 
-`data_service_sdk.*` is the public import namespace for `1.1.0`. The existing `framework.*` namespace remains available as a compatibility layer for current integrations.
+`data_service_sdk.*` is the public import namespace for `1.2.0`. The existing `framework.*` namespace remains available as a compatibility layer for current integrations.
 
 ## Development
 ```bash
