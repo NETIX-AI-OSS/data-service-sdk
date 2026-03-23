@@ -83,7 +83,7 @@ class MqttHandler:
                     hostname=host,
                     auth=auth,
                     msg_count=1,
-                    retained=False,
+                    retained=True,
                     keepalive=25,
                     client_id=os.uname().nodename,
                     clean_session=False,

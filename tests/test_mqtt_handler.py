@@ -23,9 +23,11 @@ def make_dummy_message(payload: bytes, **overrides: Any) -> Any:
 
 def test_mqtt_handler_consume_json_object(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: List[int] = []
+    subscribe_kwargs: dict[str, Any] = {}
 
     def fake_simple(*_args: Any, **_kwargs: Any) -> Any:
         calls.append(1)
+        subscribe_kwargs.update(_kwargs)
         if len(calls) == 1:
             return make_dummy_message(b'{"k": 1}', topic="sensor/a", qos=1, retain=True, mid=12, dup=False)
         raise KeyboardInterrupt()
@@ -43,6 +45,7 @@ def test_mqtt_handler_consume_json_object(monkeypatch: pytest.MonkeyPatch) -> No
     assert metadata["topic"] == "sensor/a"
     assert metadata["subscription_topic"] == "t"
     assert metadata["host"] == "h"
+    assert subscribe_kwargs["retained"] is True
     assert metadata["qos"] == 1
     assert metadata["retain"] is True
     assert metadata["mid"] == 12
