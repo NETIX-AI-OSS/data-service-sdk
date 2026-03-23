@@ -41,3 +41,6 @@ ignore = ["E203", "W503"]
 
 [tool.setuptools.packages.find]
 include = ["framework*", "data_service_sdk*"]
+
+[tool.coverage.run]
+omit = ["tests/*"]
