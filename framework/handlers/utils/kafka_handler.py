@@ -56,12 +56,11 @@ class KafkaHandler:
 
     @staticmethod
     def _extract_key_and_headers(msg_obj: Any) -> tuple[str | None, str | None, list[KafkaHeaderMetadata]]:
-        key_value = getattr(msg_obj, "key", None)
-        key_bytes = None if key_value is None else KafkaHandler._normalize_payload(key_value)
+        key_bytes = None if msg_obj.key is None else KafkaHandler._normalize_payload(msg_obj.key)
         key_text = KafkaHandler._try_decode_utf8(key_bytes)
         key_bytes_b64 = KafkaHandler._to_b64(key_bytes)
 
-        headers_value = getattr(msg_obj, "headers", [])
+        headers_value = msg_obj.headers
         headers: list[KafkaHeaderMetadata] = []
         if isinstance(headers_value, list):
             for header in headers_value:
@@ -105,17 +104,13 @@ class KafkaHandler:
         msg_obj: Any, payload: bytes, subscription_topic: str, key_text: str | None, key_bytes_b64: str | None
     ) -> KafkaPacketMetadata:
         current_time = datetime.now(timezone.utc)
-        _partition = getattr(msg_obj, "partition", None)
-        _offset = getattr(msg_obj, "offset", None)
-        _timestamp = getattr(msg_obj, "timestamp", None)
-        _timestamp_type = getattr(msg_obj, "timestamp_type", None)
         return {
-            "topic": str(getattr(msg_obj, "topic", "") or ""),
+            "topic": str(msg_obj.topic or ""),
             "subscription_topic": subscription_topic,
-            "partition": _partition if isinstance(_partition, int) else None,
-            "offset": _offset if isinstance(_offset, int) else None,
-            "timestamp": _timestamp if isinstance(_timestamp, int) else None,
-            "timestamp_type": _timestamp_type if isinstance(_timestamp_type, int) else None,
+            "partition": msg_obj.partition if isinstance(msg_obj.partition, int) else None,
+            "offset": msg_obj.offset if isinstance(msg_obj.offset, int) else None,
+            "timestamp": msg_obj.timestamp if isinstance(msg_obj.timestamp, int) else None,
+            "timestamp_type": msg_obj.timestamp_type if isinstance(msg_obj.timestamp_type, int) else None,
             "key_text": key_text,
             "key_bytes_b64": key_bytes_b64,
             "headers": [],
@@ -126,9 +121,9 @@ class KafkaHandler:
         }
 
     def _to_consumed_message(self, msg_obj: Any) -> KafkaConsumedMessage:
-        payload = self._normalize_payload(getattr(msg_obj, "value", b""))
+        payload = self._normalize_payload(msg_obj.value if msg_obj.value is not None else b"")
         data, parse_error, payload_format = self._parse_payload(payload)
-        subscription_topic = self.__subscription_topic or str(getattr(msg_obj, "topic", "") or "")
+        subscription_topic = self.__subscription_topic or str(msg_obj.topic or "")
         key_text, key_bytes_b64, headers = self._extract_key_and_headers(msg_obj)
         metadata = self._extract_kafka_metadata(msg_obj, payload, subscription_topic, key_text, key_bytes_b64)
         metadata["headers"] = headers

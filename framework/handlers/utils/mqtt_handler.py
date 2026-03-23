@@ -49,13 +49,13 @@ class MqttHandler:
     ) -> MqttPacketMetadata:
         current_time = datetime.now(timezone.utc)
         return {
-            "topic": str(getattr(msg_obj, "topic", "") or ""),
+            "topic": str(msg_obj.topic or ""),
             "subscription_topic": subscription_topic,
             "host": host,
-            "qos": cast(Optional[int], getattr(msg_obj, "qos", None)),
-            "retain": bool(getattr(msg_obj, "retain", False)),
-            "mid": cast(Optional[int], getattr(msg_obj, "mid", None)),
-            "dup": bool(getattr(msg_obj, "dup", False)),
+            "qos": cast(Optional[int], msg_obj.qos),
+            "retain": bool(msg_obj.retain),
+            "mid": cast(Optional[int], msg_obj.mid),
+            "dup": bool(msg_obj.dup),
             "payload_size_bytes": len(payload),
             "received_at_ms": int(current_time.timestamp() * 1000),
             "received_at_iso": current_time.isoformat(),
@@ -100,7 +100,7 @@ class MqttHandler:
             return
 
         state.connected = True
-        session_present = bool(getattr(flags, "session_present", False))
+        session_present = bool(flags.session_present)
         if session_present:
             logger.debug("MQTT consumer resumed existing session topic=%s", self.__topic_name)
             return
@@ -222,7 +222,7 @@ class MqttHandler:
         host = self.__host
         while True:
             msg_obj = self._get_next_message()
-            payload = self._normalize_payload(getattr(msg_obj, "payload", b""))
+            payload = self._normalize_payload(msg_obj.payload)
             metadata = self._extract_message_metadata(msg_obj, topic, host, payload)
             data, parse_error, payload_format = self._parse_payload(payload)
             metadata["payload_format"] = payload_format
