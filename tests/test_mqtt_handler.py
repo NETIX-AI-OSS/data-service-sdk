@@ -408,7 +408,13 @@ def test_mqtt_handler_on_connect_sets_error_for_nonzero_reason_code() -> None:
 def test_mqtt_handler_on_connect_without_state_is_noop() -> None:
     handler = mqtt_handler.MqttHandler()
     invoke_handler_method(
-        handler, "_on_connect", cast(Any, DummyClient()), None, cast(Any, SimpleNamespace(session_present=False)), 0, None
+        handler,
+        "_on_connect",
+        cast(Any, DummyClient()),
+        None,
+        cast(Any, SimpleNamespace(session_present=False)),
+        0,
+        None,
     )
 
 
