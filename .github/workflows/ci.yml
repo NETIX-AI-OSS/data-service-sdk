@@ -25,8 +25,8 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check framework tests
 
-      - name: Format check (black)
-        run: uv run black --check framework tests
+      - name: Format check (ruff format)
+        run: uv run ruff format --check framework tests
 
       - name: Type check (mypy)
         run: uv run mypy --config-file mypy.ini framework tests
