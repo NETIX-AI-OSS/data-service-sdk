@@ -649,7 +649,7 @@ def test_mqtt_handler_reconnect_retries_after_oserror_and_resubscribes(
         failure = next(failures, None)
         if failure is not None:
             raise failure
-        return cast(int, original_reconnect())
+        return original_reconnect()
 
     client.reconnect = flaky_reconnect  # type: ignore[method-assign]
     sleeps: list[float] = []
@@ -714,9 +714,9 @@ def test_mqtt_handler_reconnect_retries_on_error_code(monkeypatch: pytest.Monkey
 
     def flaky_reconnect() -> int:
         try:
-            return cast(int, next(rcs))
+            return next(rcs)
         except StopIteration:
-            return cast(int, original_reconnect())
+            return original_reconnect()
 
     client.reconnect = flaky_reconnect  # type: ignore[method-assign]
     sleeps: list[float] = []
@@ -751,7 +751,7 @@ def test_mqtt_handler_reconnect_backoff_caps_at_max(monkeypatch: pytest.MonkeyPa
         failure = next(failures, None)
         if failure is not None:
             raise failure
-        return cast(int, original_reconnect())
+        return original_reconnect()
 
     client.reconnect = flaky_reconnect  # type: ignore[method-assign]
     sleeps: list[float] = []
