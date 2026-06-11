@@ -623,3 +623,150 @@ def test_mqtt_handler_consume_recovers_after_loop_error(monkeypatch: pytest.Monk
     result = next(handler.consume())
     assert result["data"] == {"k": 5}
     assert client.call_history["reconnect_calls"] == 1
+
+
+def test_mqtt_handler_reconnect_retries_after_oserror_and_resubscribes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A socket-level reconnect failure (paho RAISES OSError, it does not
+    return an rc) must be retried with backoff, and a successful reconnect
+    without a preserved session must re-subscribe."""
+    client = install_dummy_client(
+        monkeypatch,
+        [
+            ("connect", False),
+            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
+            ("disconnect", 1),
+            ("connect", False),  # broker lost the session -> resubscribe
+            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
+        ],
+    )
+    failures = iter([OSError("dns failure"), OSError("dns failure")])
+
+    original_reconnect = client.reconnect
+
+    def flaky_reconnect() -> int:
+        failure = next(failures, None)
+        if failure is not None:
+            raise failure
+        return original_reconnect()
+
+    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
+    sleeps: list[float] = []
+    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
+
+    handler = mqtt_handler.MqttHandler()
+    handler.init_consumer("sensor/a", "host", "user", "pass")
+    generator = handler.consume()
+    first = next(generator)
+    second = next(generator)
+
+    assert first["data"] == {"k": 1}
+    assert second["data"] == {"k": 2}
+    # Two failed attempts slept with exponential backoff before success.
+    assert sleeps == [1.0, 2.0]
+    # Initial subscribe + post-reconnect resubscribe (session_present=False).
+    assert [topic for topic, _qos in client.call_history["subscribe_calls"]] == ["sensor/a", "sensor/a"]
+
+
+def test_mqtt_handler_reconnect_gives_up_after_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prolonged disconnection surfaces as a raise so the worker process dies
+    visibly instead of staying healthy-looking but deaf."""
+    client = install_dummy_client(
+        monkeypatch,
+        [
+            ("connect", False),
+            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
+            ("disconnect", 1),
+        ],
+    )
+
+    def always_down() -> int:
+        raise OSError("broker unreachable")
+
+    client.reconnect = always_down  # type: ignore[method-assign]
+    monkeypatch.setenv("MQTT_RECONNECT_GIVE_UP_SECS", "0")
+    monkeypatch.setattr(mqtt_handler.time, "sleep", lambda _delay: None)
+
+    handler = mqtt_handler.MqttHandler()
+    handler.init_consumer("sensor/a", "host", "user", "pass")
+    generator = handler.consume()
+    next(generator)
+
+    with pytest.raises(RuntimeError, match="could not reconnect within"):
+        next(generator)
+
+
+def test_mqtt_handler_reconnect_retries_on_error_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-success rc from reconnect() is retried, not raised immediately."""
+    client = install_dummy_client(
+        monkeypatch,
+        [
+            ("connect", False),
+            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
+            ("disconnect", 1),
+            ("connect", True),  # broker kept the session -> no resubscribe
+            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
+        ],
+    )
+    rcs = iter([mqtt_handler.mqtt.MQTT_ERR_NO_CONN])
+    original_reconnect = client.reconnect
+
+    def flaky_reconnect() -> int:
+        try:
+            return next(rcs)
+        except StopIteration:
+            return original_reconnect()
+
+    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
+    sleeps: list[float] = []
+    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
+
+    handler = mqtt_handler.MqttHandler()
+    handler.init_consumer("sensor/a", "host", "user", "pass")
+    generator = handler.consume()
+    next(generator)
+    second = next(generator)
+
+    assert second["data"] == {"k": 2}
+    assert sleeps == [1.0]
+    assert len(client.call_history["subscribe_calls"]) == 1
+
+
+def test_mqtt_handler_reconnect_backoff_caps_at_max(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = install_dummy_client(
+        monkeypatch,
+        [
+            ("connect", False),
+            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
+            ("disconnect", 1),
+            ("connect", True),
+            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
+        ],
+    )
+    failures = iter([OSError("down")] * 7)
+    original_reconnect = client.reconnect
+
+    def flaky_reconnect() -> int:
+        failure = next(failures, None)
+        if failure is not None:
+            raise failure
+        return original_reconnect()
+
+    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
+    sleeps: list[float] = []
+    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
+
+    handler = mqtt_handler.MqttHandler()
+    handler.init_consumer("sensor/a", "host", "user", "pass")
+    generator = handler.consume()
+    next(generator)
+    next(generator)
+
+    assert sleeps == [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0]
+
+
+def test_mqtt_handler_reconnect_give_up_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MQTT_RECONNECT_GIVE_UP_SECS", "not-a-number")
+    handler = mqtt_handler.MqttHandler()
+    assert invoke_handler_method(handler, "_reconnect_give_up_secs") == mqtt_handler.DEFAULT_RECONNECT_GIVE_UP_SECS

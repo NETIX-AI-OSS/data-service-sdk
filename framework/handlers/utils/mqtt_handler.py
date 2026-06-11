@@ -5,6 +5,7 @@ import logging
 import os
 import queue
 import hashlib
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, Optional, cast
@@ -14,6 +15,15 @@ from paho.mqtt import publish
 from framework.types import MqttConsumeError, MqttConsumedMessage, MqttPacketMetadata, MqttPayloadFormat
 
 logger = logging.getLogger(__name__)
+
+# Manual-reconnect backoff for the consumer (the consumer drives the network
+# loop synchronously, so paho's auto-reconnect never engages for it).
+RECONNECT_BACKOFF_MIN_SECS = 1.0
+RECONNECT_BACKOFF_MAX_SECS = 30.0
+# After this long without a successful reconnect, consume() raises so the
+# worker process dies visibly (and its orchestrator restarts it) instead of
+# sitting healthy-looking but permanently deaf.
+DEFAULT_RECONNECT_GIVE_UP_SECS = 300.0
 
 
 @dataclass
@@ -141,7 +151,11 @@ class MqttHandler:
             client_id=state.client_id,
             protocol=mqtt.MQTTv311,
             clean_session=False,
-            reconnect_on_failure=False,
+            # The consumer path reconnects manually (_reconnect_with_backoff),
+            # but enable paho's auto-reconnect too so the client also
+            # self-heals if it is ever driven by loop_start()/loop_forever()
+            # — with it disabled, reconnect_delay_set below was dead config.
+            reconnect_on_failure=True,
         )
         client.enable_logger(logger)
         client.username_pw_set(self.__auth["username"], self.__auth["password"])
@@ -195,16 +209,58 @@ class MqttHandler:
                 raise error
 
             if not state.connected:
-                result = client.reconnect()
-                if result != mqtt.MQTT_ERR_SUCCESS:
-                    raise RuntimeError(f"MQTT consumer reconnect failed: {mqtt.error_string(result)}")
-                self._wait_for_connection(client)
+                self._reconnect_with_backoff(client)
                 continue
 
             result = client.loop(timeout=1.0)
             if result != mqtt.MQTT_ERR_SUCCESS:
                 logger.warning("MQTT consumer loop returned %s, reconnecting", mqtt.error_string(result))
                 state.connected = False
+
+    @staticmethod
+    def _reconnect_give_up_secs() -> float:
+        try:
+            return float(os.environ.get("MQTT_RECONNECT_GIVE_UP_SECS", DEFAULT_RECONNECT_GIVE_UP_SECS))
+        except ValueError:
+            return DEFAULT_RECONNECT_GIVE_UP_SECS
+
+    def _reconnect_with_backoff(self, client: mqtt.Client) -> None:
+        """Re-establish a dropped consumer connection, retrying with backoff.
+
+        A broker hiccup must never leave the consumer permanently deaf: paho's
+        ``reconnect()`` RAISES (``OSError``) on socket/DNS failures rather than
+        returning an error code, and a single unhandled failure used to kill or
+        wedge the consume generator while the worker process kept looking
+        healthy (a staging ingestion pipeline was silently dead for five days).
+        Failed attempts back off exponentially up to RECONNECT_BACKOFF_MAX_SECS;
+        after MQTT_RECONNECT_GIVE_UP_SECS (default 300) without success this
+        raises, so a prolonged outage crashes the worker process visibly.
+        """
+        deadline = time.monotonic() + self._reconnect_give_up_secs()
+        delay = RECONNECT_BACKOFF_MIN_SECS
+        attempt = 0
+        while True:
+            attempt += 1
+            error: Exception
+            try:
+                result = client.reconnect()
+                if result == mqtt.MQTT_ERR_SUCCESS:
+                    # Re-runs the connect handshake; _on_connect re-subscribes
+                    # when the broker did not preserve the session.
+                    self._wait_for_connection(client)
+                    logger.info("MQTT consumer reconnected after %s attempt(s)", attempt)
+                    return
+                error = RuntimeError(f"MQTT consumer reconnect failed: {mqtt.error_string(result)}")
+            except (OSError, RuntimeError) as exc:
+                error = exc
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"MQTT consumer could not reconnect within "
+                    f"{self._reconnect_give_up_secs():g}s ({attempt} attempt(s)); last error: {error}"
+                ) from error
+            logger.warning("MQTT consumer reconnect attempt %s failed (%s); retrying in %ss", attempt, error, delay)
+            time.sleep(delay)
+            delay = min(delay * 2, RECONNECT_BACKOFF_MAX_SECS)
 
     def close_consumer(self) -> None:
         if self.__consumer_state is None:
