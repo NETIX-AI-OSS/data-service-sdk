@@ -29,6 +29,13 @@ repos:
         types: [python]
         require_serial: true
 
+      - id: mypy
+        name: mypy
+        entry: uv run mypy --config-file mypy.ini .
+        language: system
+        pass_filenames: false
+        require_serial: true
+
       - id: pytest
         name: pytest
         entry: uv run pytest --override-ini=addopts=
