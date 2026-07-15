@@ -43,3 +43,7 @@ include = ["framework*", "data_service_sdk*"]
 
 [tool.coverage.run]
 omit = ["tests/*"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
