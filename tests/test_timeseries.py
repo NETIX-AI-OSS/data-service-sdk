@@ -24,10 +24,10 @@ class DummyRedisTS:
             raise ResponseError("exists")
         self.created.append({"key": key, "retention": retention_msecs, "labels": labels, "policy": duplicate_policy})
 
-    def add(self, key: str, timestamp: int, value: Any) -> None:
+    def add(self, key: str, timestamp: int, value: Any, retention_msecs: int | None = None) -> None:
         if self.raise_on_add:
             raise ResponseError("bad")
-        self.added.append({"key": key, "timestamp": timestamp, "value": value})
+        self.added.append({"key": key, "timestamp": timestamp, "value": value, "retention": retention_msecs})
 
     def get(self, key: str) -> Any:
         return (key, self.get_value)
@@ -72,6 +72,9 @@ def test_timeseries_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert ts_client.created
     assert ts_client.added
+    # Every TS.ADD carries the series retention so auto-created keys
+    # (deleted-then-rewritten) never end up with retention 0.
+    assert all(entry["retention"] == 100 for entry in ts_client.added)
     assert str(timeseries.AggregationMethod.SUM) == "sum"
     assert value[0] == "id-1"
     assert last

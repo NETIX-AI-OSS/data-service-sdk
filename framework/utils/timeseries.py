@@ -41,7 +41,7 @@ class RedisTimeseriesClient(Protocol):
     def create(self, key: str, retention_msecs: int, labels: dict[str, str], duplicate_policy: str) -> Any:
         pass
 
-    def add(self, key: str, timestamp: int, value: Any) -> Any:
+    def add(self, key: str, timestamp: int, value: Any, retention_msecs: Optional[int] = None) -> Any:
         pass
 
     def get(self, key: str | int) -> Any:
@@ -81,6 +81,7 @@ class Timeseries:
         if retention_msecs is None:
             retention_msecs = DEFAULT_RETENTION_MSECS
         _ = meta
+        self.retention_msecs = retention_msecs
         self.id = str(ts_id)  # pylint: disable=invalid-name
         logger.debug("ts init : %s", self.id)
         labels = {"id": self.id}
@@ -101,7 +102,12 @@ class Timeseries:
             logger.warning(str(exc))
 
     def publish(self, data_tuple: tuple[int, Any]) -> None:
-        self.redis_timeseries_producer.ts().add(self.id, data_tuple[0], data_tuple[1])
+        # retention_msecs rides along so a key auto-created by TS.ADD (e.g.
+        # re-created by a live writer right after GC deleted it) still gets
+        # retention instead of the module default of 0 (= keep forever).
+        self.redis_timeseries_producer.ts().add(
+            self.id, data_tuple[0], data_tuple[1], retention_msecs=self.retention_msecs
+        )
 
     def get(self) -> Any:
         return self.redis_timeseries_producer.ts().get(self.id)
