@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -8,14 +9,15 @@ from typing import Any, List, Optional, Protocol, cast
 
 from redis import ResponseError
 
-try:
-    from app.settings import TS_AGGREGATION_INTERVAL_SECS
-except ImportError:  # pragma: no cover
-    TS_AGGREGATION_INTERVAL_SECS = 60
-
 from framework.utils.redis_timeseries import RedisTimeseries
 
 logger = logging.getLogger(__name__)
+
+TS_AGGREGATION_INTERVAL_SECS = int(os.environ.get("TS_AGGREGATION_INTERVAL_SECS", "60"))
+# Retention applied to newly created series when the caller does not pass one.
+# Consumers surface this via their deployment config (e.g. data-service's
+# k8s configmap) so every write path shares a single retention source of truth.
+DEFAULT_RETENTION_MSECS = int(os.environ.get("REDIS_TS_RETENTION_MS", str(3 * 60 * 60 * 1000)))
 
 
 class AggregationMethod(str, Enum):
@@ -61,6 +63,9 @@ class RedisTimeseriesWrapper(Protocol):
     def ts(self) -> RedisTimeseriesClient:
         pass
 
+    def unlink(self, *keys: str) -> Any:
+        pass
+
 
 # redis based timeseries class
 @dataclass
@@ -74,7 +79,7 @@ class Timeseries:
         self, ts_id: str, meta: Optional[dict[str, Any]] = None, retention_msecs: Optional[int] = None
     ) -> None:
         if retention_msecs is None:
-            retention_msecs = TS_AGGREGATION_INTERVAL_SECS * 1000
+            retention_msecs = DEFAULT_RETENTION_MSECS
         _ = meta
         self.id = str(ts_id)  # pylint: disable=invalid-name
         logger.debug("ts init : %s", self.id)
@@ -113,6 +118,21 @@ class Timeseries:
             self.redis_timeseries_producer.ts().revrange(self.id, from_time="-", to_time=to_timestamp, count=count),
         )
         return return_list
+
+    def delete(self) -> bool:
+        """Remove this series key entirely (samples, labels and metadata).
+
+        Uses ``UNLINK`` so reclamation happens off the main Redis thread.
+        Returns ``True`` when the key existed. Note that constructing a
+        ``Timeseries`` creates the key, so prefer :meth:`delete_by_id` when
+        you only hold an id and don't want a create-then-delete round trip.
+        """
+        return bool(self.redis_timeseries_producer.unlink(self.id))
+
+    @staticmethod
+    def delete_by_id(ts_id: str | int) -> bool:
+        """Remove the series key for *ts_id* without creating it first."""
+        return bool(RedisTimeseries.get_redis_instance().unlink(str(ts_id)))
 
     def aggregate_last_n(
         self, aggregation_method: AggregationMethod, bucket_size_secs: int = TS_AGGREGATION_INTERVAL_SECS
