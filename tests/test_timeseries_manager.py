@@ -13,7 +13,9 @@ class DummyTimeseries:
     ) -> None:
         self.id = ts_id
         self.meta = meta
-        self.retention_msecs = retention_msecs
+        # int (not Optional) to stay attribute-compatible with the real
+        # Timeseries, which resolves None to a default before assigning.
+        self.retention_msecs: int = retention_msecs if retention_msecs is not None else 0
 
 
 def test_timeseries_manager_reuses_instance(monkeypatch: pytest.MonkeyPatch) -> None:
