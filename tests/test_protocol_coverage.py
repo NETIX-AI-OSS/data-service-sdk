@@ -27,6 +27,7 @@ def test_timeseries_protocol_method_bodies() -> None:
     assert timeseries.RedisTimeseriesClient.get(client, "k") is None
     assert timeseries.RedisTimeseriesClient.revrange(client, "k", "-", "+", count=1) is None
     assert timeseries.RedisTimeseriesWrapper.ts(wrapper) is None
+    assert timeseries.RedisTimeseriesWrapper.unlink(wrapper, "k") is None
 
 
 def test_worker_handler_protocol_method_bodies() -> None:
