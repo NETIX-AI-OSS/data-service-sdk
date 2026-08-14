@@ -321,3 +321,62 @@ def test_kafka_handler_consume_loop_logs_parse_error(monkeypatch: pytest.MonkeyP
     assert result["data"] == b"not-json"
     assert result["error"] is not None
     assert result["error"]["type"] == "json_decode_error"
+
+
+def test_kafka_handler_init_consumer_bounds_poll_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The consumer must cap batch size and widen the poll ceiling.
+
+    ``consume()`` yields a polled batch record-by-record without polling
+    again, so the whole batch has to be processed within
+    ``max_poll_interval_ms`` or the member is evicted mid-batch having
+    committed nothing -- a rebalance loop that never advances the offset.
+    """
+    captured: dict[str, Any] = {}
+
+    def fake_consumer(*_args: Any, **kwargs: Any) -> DummyConsumer:
+        captured.update(kwargs)
+        return DummyConsumer([])
+
+    monkeypatch.setattr(kafka_handler, "KafkaConsumer", fake_consumer)
+
+    handler = kafka_handler.KafkaHandler()
+    handler.init_consumer(
+        topic="t",
+        kafka_bootstrap_servers="b",
+        kafka_ts_group_id="g",
+        kafka_ts_offset_reset="earliest",
+        kafka_ts_auto_commit=True,
+        polling_interval_secs=0.0,
+    )
+
+    assert captured["max_poll_records"] == kafka_handler.MAX_POLL_RECORDS
+    assert captured["max_poll_interval_ms"] == kafka_handler.MAX_POLL_INTERVAL_MS
+    # kafka-python's stock 500/300000 leaves ~600ms per record before the
+    # poll timeout trips; stay comfortably clear of that.
+    assert captured["max_poll_records"] < 500
+    assert captured["max_poll_interval_ms"] >= 300_000
+
+
+def test_kafka_handler_init_consumer_poll_bounds_are_overridable(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_consumer(*_args: Any, **kwargs: Any) -> DummyConsumer:
+        captured.update(kwargs)
+        return DummyConsumer([])
+
+    monkeypatch.setattr(kafka_handler, "KafkaConsumer", fake_consumer)
+
+    handler = kafka_handler.KafkaHandler()
+    handler.init_consumer(
+        topic="t",
+        kafka_bootstrap_servers="b",
+        kafka_ts_group_id="g",
+        kafka_ts_offset_reset="earliest",
+        kafka_ts_auto_commit=True,
+        polling_interval_secs=0.0,
+        max_poll_records=7,
+        max_poll_interval_ms=123_000,
+    )
+
+    assert captured["max_poll_records"] == 7
+    assert captured["max_poll_interval_ms"] == 123_000
