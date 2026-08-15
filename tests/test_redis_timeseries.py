@@ -8,12 +8,13 @@ from framework.utils import redis_timeseries
 
 
 def test_redis_timeseries_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {}
+    calls: dict[str, Any] = {}
 
     class DummyRedisCluster:
         @classmethod
-        def from_url(cls, url: str) -> "DummyRedisCluster":
+        def from_url(cls, url: str, **kwargs: Any) -> "DummyRedisCluster":
             calls["url"] = url
+            calls["kwargs"] = kwargs
             return cls()
 
     monkeypatch.setenv("REDIS_CLUSTER", "true")
@@ -28,15 +29,22 @@ def test_redis_timeseries_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert isinstance(cast(Any, instance), DummyRedisCluster)
     assert calls["url"].startswith("redis://:pwd@host:6379")
+    # Regression: dynamic startup nodes must stay off. With redis-py's default
+    # of True the client swaps the configured DNS endpoint for the pod IPs it
+    # discovers, and can never re-resolve the service once those IPs churn.
+    assert calls["kwargs"]["dynamic_startup_nodes"] is False
+    assert calls["kwargs"]["socket_connect_timeout"] > 0
+    assert calls["kwargs"]["socket_timeout"] > 0
 
 
 def test_redis_timeseries_non_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {}
+    calls: dict[str, Any] = {}
 
     class DummyRedis:
         @classmethod
-        def from_url(cls, url: str) -> "DummyRedis":
+        def from_url(cls, url: str, **kwargs: Any) -> "DummyRedis":
             calls["url"] = url
+            calls["kwargs"] = kwargs
             return cls()
 
     monkeypatch.setenv("REDIS_CLUSTER", "false")
@@ -51,6 +59,11 @@ def test_redis_timeseries_non_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert isinstance(cast(Any, instance), DummyRedis)
     assert calls["url"].startswith("redis://:pwd@host:6379")
+    # Single-node clients take no startup-node set, but must still bound
+    # connect/read so an unreachable host fails fast.
+    assert "dynamic_startup_nodes" not in calls["kwargs"]
+    assert calls["kwargs"]["socket_connect_timeout"] > 0
+    assert calls["kwargs"]["socket_timeout"] > 0
 
 
 def test_redis_timeseries_raises_when_instance_missing() -> None:

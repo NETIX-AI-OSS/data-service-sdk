@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone
 
@@ -18,6 +19,26 @@ from framework.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ``consume()`` drives the consumer through kafka-python's iterator protocol:
+# one ``poll()`` fetches up to ``max_poll_records`` records, which are then
+# yielded one at a time with no further ``poll()`` in between. The *whole*
+# batch therefore has to be processed within ``max_poll_interval_ms`` or the
+# heartbeat thread declares the poll timeout expired and leaves the group.
+#
+# With auto-commit that is silently destructive: offsets are only committed
+# during ``poll()``, so a member evicted mid-batch has committed nothing,
+# rejoins at the same offset, replays the same records, and stalls again --
+# a rebalance loop that makes zero progress while lag grows without bound.
+# kafka-python's stock 500 records / 5 minutes leaves only ~600ms per record
+# before that trips, which a slow downstream dependency blows straight
+# through (prod incident 2026-08-14, consumer group tag-redis-nc3).
+#
+# Smaller batches plus a longer ceiling give a slow batch far more headroom
+# to finish and commit. Both are env-tunable so a wedged consumer can be
+# widened without a rebuild.
+MAX_POLL_RECORDS = int(os.environ.get("KAFKA_MAX_POLL_RECORDS", "100"))
+MAX_POLL_INTERVAL_MS = int(os.environ.get("KAFKA_MAX_POLL_INTERVAL_MS", "600000"))
 
 
 class KafkaHandler:
@@ -138,6 +159,8 @@ class KafkaHandler:
         kafka_ts_offset_reset: str,
         kafka_ts_auto_commit: bool,
         polling_interval_secs: float,
+        max_poll_records: int = MAX_POLL_RECORDS,
+        max_poll_interval_ms: int = MAX_POLL_INTERVAL_MS,
     ) -> None:
         self.__subscription_topic = topic
         self.__polling_interval_secs = polling_interval_secs
@@ -147,6 +170,8 @@ class KafkaHandler:
             group_id=kafka_ts_group_id,
             auto_offset_reset=kafka_ts_offset_reset,
             enable_auto_commit=kafka_ts_auto_commit,
+            max_poll_records=max_poll_records,
+            max_poll_interval_ms=max_poll_interval_ms,
         )
 
     def assign_and_seek(
