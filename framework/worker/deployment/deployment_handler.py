@@ -20,16 +20,6 @@ from kubernetes.client import ApiException
 logger = logging.getLogger(__name__)
 
 
-"""
-worker type
-         'tag_redis':
-         'computation':
-         'sample_thunderbolt':
-         'sample_thunderbolt_redis':
-
-"""
-
-
 class WorkerHandler:
     DELETE_MAX_ATTEMPTS = 3
 
