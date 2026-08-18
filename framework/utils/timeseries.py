@@ -122,13 +122,7 @@ class Timeseries:
         return return_list
 
     def delete(self) -> bool:
-        """Remove this series key entirely (samples, labels and metadata).
-
-        Uses ``UNLINK`` so reclamation happens off the main Redis thread.
-        Returns ``True`` when the key existed. Note that constructing a
-        ``Timeseries`` creates the key, so prefer :meth:`delete_by_id` when
-        you only hold an id and don't want a create-then-delete round trip.
-        """
+        """Removes this series key entirely via UNLINK; prefer delete_by_id if you only hold an id, to skip the create-then-delete round trip."""
         return bool(self.redis_timeseries_producer.unlink(self.id))
 
     @staticmethod

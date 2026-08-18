@@ -219,17 +219,7 @@ class MqttHandler:
             return DEFAULT_RECONNECT_GIVE_UP_SECS
 
     def _reconnect_with_backoff(self, client: mqtt.Client) -> None:
-        """Re-establish a dropped consumer connection, retrying with backoff.
-
-        A broker hiccup must never leave the consumer permanently deaf: paho's
-        ``reconnect()`` RAISES (``OSError``) on socket/DNS failures rather than
-        returning an error code, and a single unhandled failure used to kill or
-        wedge the consume generator while the worker process kept looking
-        healthy (a staging ingestion pipeline was silently dead for five days).
-        Failed attempts back off exponentially up to RECONNECT_BACKOFF_MAX_SECS;
-        after MQTT_RECONNECT_GIVE_UP_SECS (default 300) without success this
-        raises, so a prolonged outage crashes the worker process visibly.
-        """
+        """Retries a dropped connection with exponential backoff, raising after the give-up deadline so a prolonged outage crashes the worker visibly instead of silently going deaf."""
         deadline = time.monotonic() + self._reconnect_give_up_secs()
         delay = RECONNECT_BACKOFF_MIN_SECS
         attempt = 0
