@@ -16,13 +16,10 @@ from framework.types import MqttConsumeError, MqttConsumedMessage, MqttPacketMet
 
 logger = logging.getLogger(__name__)
 
-# Manual-reconnect backoff for the consumer (the consumer drives the network
-# loop synchronously, so paho's auto-reconnect never engages for it).
+# Manual-reconnect backoff (consumer's sync loop bypasses paho's auto-reconnect)
 RECONNECT_BACKOFF_MIN_SECS = 1.0
 RECONNECT_BACKOFF_MAX_SECS = 30.0
-# After this long without a successful reconnect, consume() raises so the
-# worker process dies visibly (and its orchestrator restarts it) instead of
-# sitting healthy-looking but permanently deaf.
+# After this long without reconnect, consume() raises so orchestrator restarts
 DEFAULT_RECONNECT_GIVE_UP_SECS = 300.0
 
 
@@ -151,10 +148,7 @@ class MqttHandler:
             client_id=state.client_id,
             protocol=mqtt.MQTTv311,
             clean_session=False,
-            # The consumer path reconnects manually (_reconnect_with_backoff),
-            # but enable paho's auto-reconnect too so the client also
-            # self-heals if it is ever driven by loop_start()/loop_forever()
-            # — with it disabled, reconnect_delay_set below was dead config.
+            # Enable paho auto-reconnect too, for loop_start/loop_forever self-heal paths
             reconnect_on_failure=True,
         )
         client.enable_logger(logger)
@@ -245,8 +239,7 @@ class MqttHandler:
             try:
                 result = client.reconnect()
                 if result == mqtt.MQTT_ERR_SUCCESS:
-                    # Re-runs the connect handshake; _on_connect re-subscribes
-                    # when the broker did not preserve the session.
+                    # Re-runs connect handshake; _on_connect re-subscribes if session wasn't kept
                     self._wait_for_connection(client)
                     logger.info("MQTT consumer reconnected after %s attempt(s)", attempt)
                     return

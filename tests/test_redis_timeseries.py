@@ -29,9 +29,7 @@ def test_redis_timeseries_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert isinstance(cast(Any, instance), DummyRedisCluster)
     assert calls["url"].startswith("redis://:pwd@host:6379")
-    # Regression: dynamic startup nodes must stay off. With redis-py's default
-    # of True the client swaps the configured DNS endpoint for the pod IPs it
-    # discovers, and can never re-resolve the service once those IPs churn.
+    # Regression: dynamic startup nodes off, else it locks to stale pod IPs
     assert calls["kwargs"]["dynamic_startup_nodes"] is False
     assert calls["kwargs"]["socket_connect_timeout"] > 0
     assert calls["kwargs"]["socket_timeout"] > 0
@@ -59,8 +57,7 @@ def test_redis_timeseries_non_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert isinstance(cast(Any, instance), DummyRedis)
     assert calls["url"].startswith("redis://:pwd@host:6379")
-    # Single-node clients take no startup-node set, but must still bound
-    # connect/read so an unreachable host fails fast.
+    # Single-node clients need bounded connect/read timeouts to fail fast
     assert "dynamic_startup_nodes" not in calls["kwargs"]
     assert calls["kwargs"]["socket_connect_timeout"] > 0
     assert calls["kwargs"]["socket_timeout"] > 0

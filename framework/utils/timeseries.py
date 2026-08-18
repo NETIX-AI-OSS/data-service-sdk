@@ -14,9 +14,7 @@ from framework.utils.redis_timeseries import RedisTimeseries
 logger = logging.getLogger(__name__)
 
 TS_AGGREGATION_INTERVAL_SECS = int(os.environ.get("TS_AGGREGATION_INTERVAL_SECS", "60"))
-# Retention applied to newly created series when the caller does not pass one.
-# Consumers surface this via their deployment config (e.g. data-service's
-# k8s configmap) so every write path shares a single retention source of truth.
+# Retention for new series; consumers set via deployment config (single source)
 DEFAULT_RETENTION_MSECS = int(os.environ.get("REDIS_TS_RETENTION_MS", str(3 * 60 * 60 * 1000)))
 
 
@@ -102,9 +100,7 @@ class Timeseries:
             logger.warning(str(exc))
 
     def publish(self, data_tuple: tuple[int, Any]) -> None:
-        # retention_msecs rides along so a key auto-created by TS.ADD (e.g.
-        # re-created by a live writer right after GC deleted it) still gets
-        # retention instead of the module default of 0 (= keep forever).
+        # retention_msecs rides along so TS.ADD auto-create doesn't get retention 0
         self.redis_timeseries_producer.ts().add(
             self.id, data_tuple[0], data_tuple[1], retention_msecs=self.retention_msecs
         )

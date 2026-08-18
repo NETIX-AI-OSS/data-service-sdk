@@ -72,8 +72,7 @@ def test_timeseries_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert ts_client.created
     assert ts_client.added
-    # Every TS.ADD carries the series retention so auto-created keys
-    # (deleted-then-rewritten) never end up with retention 0.
+    # Every TS.ADD carries retention so auto-created keys don't get retention 0
     assert all(entry["retention"] == 100 for entry in ts_client.added)
     assert str(timeseries.AggregationMethod.SUM) == "sum"
     assert value[0] == "id-1"
