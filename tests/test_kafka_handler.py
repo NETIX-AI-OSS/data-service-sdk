@@ -351,8 +351,7 @@ def test_kafka_handler_init_consumer_bounds_poll_batch(monkeypatch: pytest.Monke
 
     assert captured["max_poll_records"] == kafka_handler.MAX_POLL_RECORDS
     assert captured["max_poll_interval_ms"] == kafka_handler.MAX_POLL_INTERVAL_MS
-    # kafka-python's stock 500/300000 leaves ~600ms per record before the
-    # poll timeout trips; stay comfortably clear of that.
+    # kafka-python defaults leave ~600ms/record before poll timeout; stay clear
     assert captured["max_poll_records"] < 500
     assert captured["max_poll_interval_ms"] >= 300_000
 

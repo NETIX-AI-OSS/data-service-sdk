@@ -19,8 +19,7 @@ class TimeseriesManger:
     def get_timeseries_create_if_not_present(
         self, ts_id: str, ts_meta: Optional[dict] = None, retention_msecs: Optional[int] = None
     ) -> Timeseries:
-        # retention_msecs=None defers to Timeseries' env-driven default
-        # (REDIS_TS_RETENTION_MS) so all write paths share one source of truth.
+        # retention_msecs=None defers to Timeseries' env-driven REDIS_TS_RETENTION_MS
         time_series = self.timeseries_map.get(ts_id)
         logger.info(f"created or got redis timeseries: {ts_id}")  # pylint: disable=logging-fstring-interpolation
         if time_series is None:

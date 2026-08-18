@@ -20,23 +20,7 @@ from framework.types import (
 
 logger = logging.getLogger(__name__)
 
-# ``consume()`` drives the consumer through kafka-python's iterator protocol:
-# one ``poll()`` fetches up to ``max_poll_records`` records, which are then
-# yielded one at a time with no further ``poll()`` in between. The *whole*
-# batch therefore has to be processed within ``max_poll_interval_ms`` or the
-# heartbeat thread declares the poll timeout expired and leaves the group.
-#
-# With auto-commit that is silently destructive: offsets are only committed
-# during ``poll()``, so a member evicted mid-batch has committed nothing,
-# rejoins at the same offset, replays the same records, and stalls again --
-# a rebalance loop that makes zero progress while lag grows without bound.
-# kafka-python's stock 500 records / 5 minutes leaves only ~600ms per record
-# before that trips, which a slow downstream dependency blows straight
-# through (prod incident 2026-08-14, consumer group tag-redis-nc3).
-#
-# Smaller batches plus a longer ceiling give a slow batch far more headroom
-# to finish and commit. Both are env-tunable so a wedged consumer can be
-# widened without a rebuild.
+# Small batches + longer ceiling give a slow batch headroom to finish and commit
 MAX_POLL_RECORDS = int(os.environ.get("KAFKA_MAX_POLL_RECORDS", "100"))
 MAX_POLL_INTERVAL_MS = int(os.environ.get("KAFKA_MAX_POLL_INTERVAL_MS", "600000"))
 
