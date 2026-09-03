@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: build-only
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
