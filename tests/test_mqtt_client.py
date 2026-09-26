@@ -47,6 +47,31 @@ def test_give_up_setting_preserves_both_legacy_names(caplog: pytest.LogCaptureFi
     assert "deprecated" in caplog.text
 
 
+def test_publisher_resolves_legacy_deadline_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("MQTT_PUBLISH_GIVE_UP_SECS", "12")
+    monkeypatch.delenv("MQTT_GIVE_UP_SECS", raising=False)
+    client = Mock()
+    client.publish.return_value.rc = mqtt.MQTT_ERR_SUCCESS
+    client.publish.return_value.is_published.return_value = True
+
+    publisher = MqttPublisher(client)
+    assert publisher.give_up_secs == 12
+    publisher.publish("telemetry", "1")
+    publisher.publish("telemetry", "2")
+    publisher.check_health()
+    publisher.check_health()
+    assert caplog.text.count("MQTT_PUBLISH_GIVE_UP_SECS is deprecated") == 1
+
+    caplog.clear()
+    explicit = MqttPublisher(client, give_up_secs=5)
+    explicit.publish("telemetry", "3")
+    explicit.check_health()
+    assert explicit.give_up_secs == 5
+    assert "deprecated" not in caplog.text
+
+
 def test_client_factory_without_auth_and_with_insecure_tls(monkeypatch: pytest.MonkeyPatch) -> None:
     factory = Mock(return_value=Mock())
     monkeypatch.setattr(mqtt_client.mqtt, "Client", factory)

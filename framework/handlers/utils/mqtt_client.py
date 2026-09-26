@@ -97,7 +97,7 @@ class MqttPublisher:
     def __init__(self, client: mqtt.Client, *, name: str = "MQTT", give_up_secs: float | None = None) -> None:
         self.client = client
         self.name = name
-        self.give_up_secs = give_up_secs
+        self.give_up_secs = mqtt_give_up_secs() if give_up_secs is None else give_up_secs
         self.first_failure_time: float | None = None
         self.last_error: Exception | None = None
         self._pending: deque[tuple[mqtt.MQTTMessageInfo, float]] = deque()
@@ -106,11 +106,10 @@ class MqttPublisher:
     def check_health(self) -> None:
         """Check delivery progress from an idle worker's regular poll loop."""
         with self._state_lock:
-            give_up_secs = self.give_up_secs if self.give_up_secs is not None else mqtt_give_up_secs()
-            self._check_pending(give_up_secs)
+            self._check_pending(self.give_up_secs)
             if self.first_failure_time is not None:
                 stalled_for = time.monotonic() - self.first_failure_time
-                if stalled_for >= give_up_secs:
+                if stalled_for >= self.give_up_secs:
                     raise MqttPublishStalledError(
                         f"Publishing for {self.name} has failed for {stalled_for:.0f}s; last error: {self.last_error}"
                     ) from self.last_error
@@ -139,7 +138,7 @@ class MqttPublisher:
             return self._publish_locked(topic, payload, qos=qos, retain=retain)
 
     def _publish_locked(self, topic: str, payload: Any, *, qos: int, retain: bool) -> mqtt.MQTTMessageInfo | None:
-        give_up_secs = self.give_up_secs if self.give_up_secs is not None else mqtt_give_up_secs()
+        give_up_secs = self.give_up_secs
         self._check_pending(give_up_secs)
         error: Exception | None = None
         try:
