@@ -4,7 +4,7 @@ import importlib
 import sys
 from types import ModuleType
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 
 _MODULE_ALIASES = {
     "data_service_sdk.types": "framework.types",
@@ -29,6 +29,7 @@ _MODULE_ALIASES = {
     "data_service_sdk.handlers.utils.db_handler": "framework.handlers.utils.db_handler",
     "data_service_sdk.handlers.utils.kafka_handler": "framework.handlers.utils.kafka_handler",
     "data_service_sdk.handlers.utils.mqtt_handler": "framework.handlers.utils.mqtt_handler",
+    "data_service_sdk.handlers.utils.mqtt_client": "framework.handlers.utils.mqtt_client",
     "data_service_sdk.utils": "framework.utils",
     "data_service_sdk.utils.expression": "framework.utils.expression",
     "data_service_sdk.utils.redis_timeseries": "framework.utils.redis_timeseries",

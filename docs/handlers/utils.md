@@ -8,6 +8,14 @@ Document reusable low-level integrations for DB writes, Kafka IO, and MQTT IO us
 - `data_service_sdk.handlers.utils.db_handler.DataHandler`
 - `data_service_sdk.handlers.utils.kafka_handler.KafkaHandler`
 - `data_service_sdk.handlers.utils.mqtt_handler.MqttHandler`
+- `data_service_sdk.handlers.utils.mqtt_client.create_mqtt_client`
+- `data_service_sdk.handlers.utils.mqtt_client.MqttPublisher`
+
+`MqttPublisher` keeps the network loop alive and raises `MqttPublishStalledError`
+after repeated failed publish attempts. Set `MQTT_GIVE_UP_SECS` to control the
+deadline (default 300 seconds). The older `MQTT_PUBLISH_GIVE_UP_SECS` and
+`MQTT_RECONNECT_GIVE_UP_SECS` names remain supported, with deprecation warnings.
+The SDK's MQTT consumer uses the same deadline setting.
 
 ## Minimal Configuration Example
 DB handlers:

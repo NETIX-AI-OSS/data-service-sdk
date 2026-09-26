@@ -580,6 +580,7 @@ def test_mqtt_handler_get_next_message_raises_stored_connect_error(monkeypatch: 
 
 
 def test_mqtt_handler_get_next_message_raises_on_reconnect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MQTT_GIVE_UP_SECS", "0")
     handler = mqtt_handler.MqttHandler()
     client = DummyClient()
     client.results["reconnect"] = 9
@@ -628,7 +629,7 @@ def test_mqtt_handler_consume_recovers_after_loop_error(monkeypatch: pytest.Monk
 def test_mqtt_handler_reconnect_retries_after_oserror_and_resubscribes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A socket-level reconnect failure (paho raises OSError instead of returning an rc) is retried with backoff, and re-subscribes once reconnected without a preserved session."""
+    """Retry an OSError with backoff, then resubscribe if the session was lost."""
     client = install_dummy_client(
         monkeypatch,
         [
@@ -668,7 +669,7 @@ def test_mqtt_handler_reconnect_retries_after_oserror_and_resubscribes(
 
 
 def test_mqtt_handler_reconnect_gives_up_after_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prolonged disconnection surfaces as a raise so the worker process dies visibly instead of staying healthy-looking but deaf."""
+    """A prolonged disconnection raises so the worker can restart."""
     client = install_dummy_client(
         monkeypatch,
         [

@@ -12,6 +12,7 @@ from typing import Any, Dict, Generator, Optional, cast
 
 import paho.mqtt.client as mqtt
 from paho.mqtt import publish
+from framework.handlers.utils.mqtt_client import DEFAULT_GIVE_UP_SECS, create_mqtt_client, mqtt_give_up_secs
 from framework.types import MqttConsumeError, MqttConsumedMessage, MqttPacketMetadata, MqttPayloadFormat
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 RECONNECT_BACKOFF_MIN_SECS = 1.0
 RECONNECT_BACKOFF_MAX_SECS = 30.0
 # After this long without reconnect, consume() raises so orchestrator restarts
-DEFAULT_RECONNECT_GIVE_UP_SECS = 300.0
+DEFAULT_RECONNECT_GIVE_UP_SECS = DEFAULT_GIVE_UP_SECS
 
 
 @dataclass
@@ -143,20 +144,16 @@ class MqttHandler:
         if state.client is not None:
             return state.client
 
-        client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
+        client = create_mqtt_client(
             client_id=state.client_id,
-            protocol=mqtt.MQTTv311,
             clean_session=False,
-            # Enable paho auto-reconnect too, for loop_start/loop_forever self-heal paths
-            reconnect_on_failure=True,
+            username=self.__auth["username"],
+            password=self.__auth["password"],
         )
         client.enable_logger(logger)
-        client.username_pw_set(self.__auth["username"], self.__auth["password"])
         client.on_connect = self._on_connect
         client.on_disconnect = self._on_disconnect
         client.on_message = self._on_message
-        client.reconnect_delay_set(min_delay=1, max_delay=30)
 
         state.messages = queue.Queue()
         state.connected = False
@@ -213,13 +210,10 @@ class MqttHandler:
 
     @staticmethod
     def _reconnect_give_up_secs() -> float:
-        try:
-            return float(os.environ.get("MQTT_RECONNECT_GIVE_UP_SECS", DEFAULT_RECONNECT_GIVE_UP_SECS))
-        except ValueError:
-            return DEFAULT_RECONNECT_GIVE_UP_SECS
+        return mqtt_give_up_secs()
 
     def _reconnect_with_backoff(self, client: mqtt.Client) -> None:
-        """Retries a dropped connection with exponential backoff, raising after the give-up deadline so a prolonged outage crashes the worker visibly instead of silently going deaf."""
+        """Retry a dropped connection until the deadline, then fail the worker visibly."""
         deadline = time.monotonic() + self._reconnect_give_up_secs()
         delay = RECONNECT_BACKOFF_MIN_SECS
         attempt = 0

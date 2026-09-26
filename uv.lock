@@ -104,7 +104,7 @@ wheels = [
 
 [[package]]
 name = "data-service-sdk"
-version = "1.5.0"
+version = "1.6.0"
 source = { virtual = "." }
 dependencies = [
     { name = "k8s-utils-py" },
@@ -134,7 +134,7 @@ requires-dist = [
     { name = "k8s-utils-py", git = "https://github.com/NETIX-AI-OSS/k8s-utils-py.git?rev=v1.0" },
     { name = "kafka-python", specifier = ">=2.3.2" },
     { name = "kubernetes", specifier = ">=28.1.0" },
-    { name = "paho-mqtt", specifier = ">=1.6.1" },
+    { name = "paho-mqtt", specifier = ">=2.0,<3" },
     { name = "redis", extras = ["hiredis"], specifier = ">=5.0.1" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "sqlalchemy", specifier = ">=2.0.30" },

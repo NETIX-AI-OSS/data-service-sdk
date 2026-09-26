@@ -122,7 +122,7 @@ class Timeseries:
         return return_list
 
     def delete(self) -> bool:
-        """Removes this series key entirely via UNLINK; prefer delete_by_id if you only hold an id, to skip the create-then-delete round trip."""
+        """Remove this series key via UNLINK; use delete_by_id when only its id is available."""
         return bool(self.redis_timeseries_producer.unlink(self.id))
 
     @staticmethod
