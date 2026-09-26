@@ -123,17 +123,17 @@ class KafkaConsumedMessage(TypedDict):
 
 class OutputProducer(Protocol):
     def produce(self, msg: Any) -> Any:
-        pass
+        """Deliver one message to the configured output."""
 
 
 class OutputProducerFactory(Protocol):
     def __call__(self, config: Mapping[str, Any]) -> OutputProducer:
-        pass
+        """Build an output producer from its configuration."""
 
 
 class RowMapping(Protocol):
     def __getitem__(self, key: str) -> Any:
-        pass
+        """Read one field from a row by name."""
 
 
 RowMappings = Sequence[Mapping[str, Any]]
