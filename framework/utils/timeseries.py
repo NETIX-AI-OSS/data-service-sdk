@@ -37,13 +37,13 @@ class AggregationMethod(str, Enum):
 
 class RedisTimeseriesClient(Protocol):
     def create(self, key: str, retention_msecs: int, labels: dict[str, str], duplicate_policy: str) -> Any:
-        pass
+        """Create a series with the requested retention and labels."""
 
     def add(self, key: str, timestamp: int, value: Any, retention_msecs: Optional[int] = None) -> Any:
-        pass
+        """Append a timestamped value to a series."""
 
     def get(self, key: str | int) -> Any:
-        pass
+        """Read the latest value from a series."""
 
     def revrange(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -54,15 +54,15 @@ class RedisTimeseriesClient(Protocol):
         aggregation_type: Optional[str] = None,
         bucket_size_msec: Optional[int] = None,
     ) -> Any:
-        pass
+        """Read values in reverse time order with optional aggregation."""
 
 
 class RedisTimeseriesWrapper(Protocol):
     def ts(self) -> RedisTimeseriesClient:
-        pass
+        """Return the RedisTimeSeries command interface."""
 
     def unlink(self, *keys: str) -> Any:
-        pass
+        """Remove one or more series keys without blocking Redis."""
 
 
 # redis based timeseries class
@@ -122,7 +122,7 @@ class Timeseries:
         return return_list
 
     def delete(self) -> bool:
-        """Removes this series key entirely via UNLINK; prefer delete_by_id if you only hold an id, to skip the create-then-delete round trip."""
+        """Remove this series key via UNLINK; use delete_by_id when only its id is available."""
         return bool(self.redis_timeseries_producer.unlink(self.id))
 
     @staticmethod

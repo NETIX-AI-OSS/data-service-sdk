@@ -28,7 +28,7 @@ class WorkerHandler:
 
     class OutputDestinationManager(Protocol):
         def all(self) -> list["WorkerHandler.OutputDestination"]:
-            pass
+            """Return all configured output destinations."""
 
     class InputType(Protocol):
         input_id_internal: str

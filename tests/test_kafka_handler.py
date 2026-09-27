@@ -324,7 +324,7 @@ def test_kafka_handler_consume_loop_logs_parse_error(monkeypatch: pytest.MonkeyP
 
 
 def test_kafka_handler_init_consumer_bounds_poll_batch(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Caps batch size and widens the poll ceiling so a full batch can be processed within max_poll_interval_ms without a mid-batch rebalance eviction."""
+    """Keep a full batch within max_poll_interval_ms without a rebalance eviction."""
     captured: dict[str, Any] = {}
 
     def fake_consumer(*_args: Any, **kwargs: Any) -> DummyConsumer:
