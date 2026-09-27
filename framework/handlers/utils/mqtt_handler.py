@@ -6,21 +6,31 @@ import os
 import queue
 import hashlib
 import time
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Generator, Optional, cast
 
 import paho.mqtt.client as mqtt
 from paho.mqtt import publish
-from framework.handlers.utils.mqtt_client import DEFAULT_GIVE_UP_SECS, create_mqtt_client, mqtt_give_up_secs
-from framework.types import MqttConsumeError, MqttConsumedMessage, MqttPacketMetadata, MqttPayloadFormat
+from framework.handlers.utils.mqtt_client import (
+    DEFAULT_GIVE_UP_SECS,
+    create_mqtt_client,
+    mqtt_give_up_secs,
+)
+from framework.types import (
+    MqttConsumeError,
+    MqttConsumedMessage,
+    MqttPacketMetadata,
+    MqttPayloadFormat,
+)
 
 logger = logging.getLogger(__name__)
 
 # Manual-reconnect backoff (consumer's sync loop bypasses paho's auto-reconnect)
 RECONNECT_BACKOFF_MIN_SECS = 1.0
 RECONNECT_BACKOFF_MAX_SECS = 30.0
-# After this long without reconnect, consume() raises so orchestrator restarts
+# The shared default retries indefinitely; a finite MQTT_GIVE_UP_SECS can bound retries.
 DEFAULT_RECONNECT_GIVE_UP_SECS = DEFAULT_GIVE_UP_SECS
 
 
@@ -31,6 +41,7 @@ class _MqttConsumerState:
     messages: queue.Queue[Any] = field(default_factory=queue.Queue)
     connected: bool = False
     connect_error: RuntimeError | None = None
+    closed: threading.Event = field(default_factory=threading.Event)
 
 
 class MqttHandler:
@@ -71,7 +82,9 @@ class MqttHandler:
         }
 
     @staticmethod
-    def _parse_payload(payload: bytes) -> tuple[Any | None, MqttConsumeError | None, MqttPayloadFormat]:
+    def _parse_payload(
+        payload: bytes,
+    ) -> tuple[Any | None, MqttConsumeError | None, MqttPayloadFormat]:
         try:
             return json.loads(payload), None, "json"
         except UnicodeDecodeError as error:
@@ -98,12 +111,18 @@ class MqttHandler:
         return str(payload).encode("utf-8", errors="replace")
 
     def _on_connect(
-        self, client: mqtt.Client, _userdata: Any, flags: mqtt.ConnectFlags, reason_code: Any, _properties: Any
+        self,
+        client: mqtt.Client,
+        _userdata: Any,
+        flags: mqtt.ConnectFlags,
+        reason_code: Any,
+        _properties: Any,
     ) -> None:
         state = self.__consumer_state
         if state is None:
             return
         if reason_code != 0:
+            state.connected = False
             state.connect_error = RuntimeError(f"MQTT consumer connection failed: {reason_code}")
             return
 
@@ -114,18 +133,25 @@ class MqttHandler:
             return
 
         if self.__topic_name is None:
+            state.connected = False
             state.connect_error = RuntimeError("MQTT consumer topic not configured")
             return
 
         result, _mid = client.subscribe(self.__topic_name, qos=0)
         if result != mqtt.MQTT_ERR_SUCCESS:
+            state.connected = False
             state.connect_error = RuntimeError(f"MQTT consumer subscribe failed: {mqtt.error_string(result)}")
             return
 
         logger.debug("MQTT consumer subscribed topic=%s", self.__topic_name)
 
     def _on_disconnect(
-        self, _client: mqtt.Client, _userdata: Any, _flags: Any, reason_code: Any, _properties: Any
+        self,
+        _client: mqtt.Client,
+        _userdata: Any,
+        _flags: Any,
+        reason_code: Any,
+        _properties: Any,
     ) -> None:
         if self.__consumer_state is not None:
             self.__consumer_state.connected = False
@@ -160,25 +186,29 @@ class MqttHandler:
         state.connect_error = None
         state.client = client
 
-        result = client.connect(self.__host, keepalive=25)
-        if result != mqtt.MQTT_ERR_SUCCESS:
-            raise RuntimeError(f"MQTT consumer connect failed: {mqtt.error_string(result)}")
-
-        self._wait_for_connection(client)
+        self._connect_with_backoff(client, initial=True)
         return client
 
-    def _wait_for_connection(self, client: mqtt.Client) -> None:
+    def _wait_for_connection(self, client: mqtt.Client, *, deadline: float = float("inf")) -> None:
         state = self.__consumer_state
         if state is None:
             raise RuntimeError("MQTT consumer not initialized")
 
-        while not state.connected:
+        polled = False
+        while True:
+            if state.closed.is_set():
+                raise RuntimeError("MQTT consumer closed")
             if state.connect_error is not None:
                 error = state.connect_error
                 state.connect_error = None
                 raise error
+            if state.connected:
+                return
+            if polled and time.monotonic() >= deadline:
+                raise RuntimeError("MQTT consumer connection handshake timed out")
 
             result = client.loop(timeout=1.0)
+            polled = True
             if result != mqtt.MQTT_ERR_SUCCESS:
                 raise RuntimeError(f"MQTT consumer loop failed during connect: {mqtt.error_string(result)}")
 
@@ -191,21 +221,30 @@ class MqttHandler:
             raise RuntimeError("MQTT consumer message queue not initialized")
 
         while True:
+            if state.closed.is_set():
+                raise RuntimeError("MQTT consumer closed")
             if not state.messages.empty():
                 return state.messages.get()
 
             if state.connect_error is not None:
-                error = state.connect_error
                 state.connect_error = None
-                raise error
+                state.connected = False
 
             if not state.connected:
                 self._reconnect_with_backoff(client)
                 continue
 
-            result = client.loop(timeout=1.0)
+            try:
+                result = client.loop(timeout=1.0)
+            except (OSError, RuntimeError) as error:
+                logger.warning("MQTT consumer loop failed (%s), reconnecting", error)
+                state.connected = False
+                continue
             if result != mqtt.MQTT_ERR_SUCCESS:
-                logger.warning("MQTT consumer loop returned %s, reconnecting", mqtt.error_string(result))
+                logger.warning(
+                    "MQTT consumer loop returned %s, reconnecting",
+                    mqtt.error_string(result),
+                )
                 state.connected = False
 
     @staticmethod
@@ -213,35 +252,57 @@ class MqttHandler:
         return mqtt_give_up_secs()
 
     def _reconnect_with_backoff(self, client: mqtt.Client) -> None:
-        """Retry a dropped connection until the deadline, then fail the worker visibly."""
-        deadline = time.monotonic() + self._reconnect_give_up_secs()
+        """Retry a dropped connection until a configured finite deadline."""
+        self._connect_with_backoff(client, initial=False)
+
+    def _connect_with_backoff(self, client: mqtt.Client, *, initial: bool) -> None:
+        state = self.__consumer_state
+        if state is None or self.__host is None:
+            raise RuntimeError("MQTT consumer not initialized")
+        give_up_secs = self._reconnect_give_up_secs()
+        deadline = time.monotonic() + give_up_secs
         delay = RECONNECT_BACKOFF_MIN_SECS
         attempt = 0
+        action = "connect" if initial else "reconnect"
         while True:
+            if state.closed.is_set():
+                raise RuntimeError("MQTT consumer closed")
             attempt += 1
+            state.connect_error = None
+            state.connected = False
             error: Exception
             try:
-                result = client.reconnect()
+                result = client.connect(self.__host, keepalive=25) if initial else client.reconnect()
                 if result == mqtt.MQTT_ERR_SUCCESS:
                     # Re-runs connect handshake; _on_connect re-subscribes if session wasn't kept
-                    self._wait_for_connection(client)
-                    logger.info("MQTT consumer reconnected after %s attempt(s)", attempt)
+                    self._wait_for_connection(client, deadline=deadline)
+                    logger.info("MQTT consumer connected after %s attempt(s)", attempt)
                     return
-                error = RuntimeError(f"MQTT consumer reconnect failed: {mqtt.error_string(result)}")
+                error = RuntimeError(f"MQTT consumer {action} failed: {mqtt.error_string(result)}")
             except (OSError, RuntimeError) as exc:
+                if state.closed.is_set():
+                    raise RuntimeError("MQTT consumer closed") from exc
                 error = exc
             if time.monotonic() >= deadline:
                 raise RuntimeError(
-                    f"MQTT consumer could not reconnect within "
-                    f"{self._reconnect_give_up_secs():g}s ({attempt} attempt(s)); last error: {error}"
+                    f"MQTT consumer could not {action} within "
+                    f"{give_up_secs:g}s ({attempt} attempt(s)); last error: {error}"
                 ) from error
-            logger.warning("MQTT consumer reconnect attempt %s failed (%s); retrying in %ss", attempt, error, delay)
-            time.sleep(delay)
+            logger.warning(
+                "MQTT consumer %s attempt %s failed (%s); retrying in %ss",
+                action,
+                attempt,
+                error,
+                delay,
+            )
+            if state.closed.wait(delay):
+                raise RuntimeError("MQTT consumer closed")
             delay = min(delay * 2, RECONNECT_BACKOFF_MAX_SECS)
 
     def close_consumer(self) -> None:
         if self.__consumer_state is None:
             return
+        self.__consumer_state.closed.set()
         if self.__consumer_state.client is not None:
             self.__consumer_state.client.disconnect()
         self.__consumer_state = None

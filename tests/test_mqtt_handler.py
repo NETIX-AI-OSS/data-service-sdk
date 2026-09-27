@@ -21,7 +21,7 @@ def make_dummy_message(payload: bytes, **overrides: Any) -> Any:
     return SimpleNamespace(**message_data)
 
 
-class DummyClient:
+class DummyClient:  # pylint: disable=too-many-instance-attributes
     def __init__(self, client_id: str = "") -> None:
         self.client_id = client_id
         self.call_history: dict[str, Any] = {
@@ -80,6 +80,9 @@ class DummyClient:
     def reconnect_delay_set(self, min_delay: int = 1, max_delay: int = 120) -> None:
         _ = (min_delay, max_delay)
 
+    def max_queued_messages_set(self, max_queued_messages: int) -> None:
+        self.config["max_queued_messages"] = max_queued_messages
+
     def connect(self, host: str, port: int = 1883, keepalive: int = 60) -> int:
         self.call_history["connect_calls"].append((host, port, keepalive))
         return cast(int, self.results["connect"])
@@ -104,10 +107,21 @@ class DummyClient:
             if callable(callback):
                 callback(self, None, SimpleNamespace(session_present=event_value), 0, None)
             return mqtt_handler.mqtt.MQTT_ERR_SUCCESS
-        if event_name == "message":
-            callback = self.on_message
+        if event_name == "connect_error":
+            callback = self.on_connect
             if callable(callback):
-                callback(self, None, event_value)
+                callback(
+                    self,
+                    None,
+                    SimpleNamespace(session_present=False),
+                    event_value,
+                    None,
+                )
+            return mqtt_handler.mqtt.MQTT_ERR_SUCCESS
+        if event_name == "message":
+            message_callback = self.on_message
+            if callable(message_callback):
+                message_callback(self, None, event_value)
             return mqtt_handler.mqtt.MQTT_ERR_SUCCESS
         if event_name == "disconnect":
             callback = self.on_disconnect
@@ -116,6 +130,8 @@ class DummyClient:
             return mqtt_handler.mqtt.MQTT_ERR_SUCCESS
         if event_name == "loop_error":
             return cast(int, event_value)
+        if event_name == "loop_exception":
+            raise OSError(str(event_value))
         raise AssertionError(f"Unknown event: {event_name}")
 
     def disconnect(self, *_args: Any, **_kwargs: Any) -> int:
@@ -153,12 +169,27 @@ def get_handler_attr(handler: mqtt_handler.MqttHandler, name: str) -> Any:
     return getattr(handler, name)
 
 
+def record_retry_waits(handler: mqtt_handler.MqttHandler) -> list[float]:
+    waits: list[float] = []
+    state = get_handler_attr(handler, "_MqttHandler__consumer_state")
+
+    def record_wait(delay: float) -> bool:
+        waits.append(delay)
+        return False
+
+    state.closed.wait = record_wait
+    return waits
+
+
 def test_mqtt_handler_consume_json_object(monkeypatch: pytest.MonkeyPatch) -> None:
     client = install_dummy_client(
         monkeypatch,
         [
             ("connect", False),
-            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a", qos=1, retain=True, mid=12, dup=False)),
+            (
+                "message",
+                make_dummy_message(b'{"k": 1}', topic="sensor/a", qos=1, retain=True, mid=12, dup=False),
+            ),
         ],
     )
 
@@ -249,7 +280,9 @@ def test_mqtt_handler_consume_non_utf8_payload(monkeypatch: pytest.MonkeyPatch) 
     assert result["metadata"]["payload_format"] == "raw_bytes"
 
 
-def test_mqtt_handler_consume_subscribes_once_for_multiple_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mqtt_handler_consume_subscribes_once_for_multiple_messages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = install_dummy_client(
         monkeypatch,
         [
@@ -272,7 +305,9 @@ def test_mqtt_handler_consume_subscribes_once_for_multiple_messages(monkeypatch:
     assert client.call_history["reconnect_calls"] == 0
 
 
-def test_mqtt_handler_reuses_existing_client_across_new_consume_generators(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mqtt_handler_reuses_existing_client_across_new_consume_generators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = install_dummy_client(
         monkeypatch,
         [
@@ -293,7 +328,9 @@ def test_mqtt_handler_reuses_existing_client_across_new_consume_generators(monke
     assert client.call_history["subscribe_calls"] == [("t", 0)]
 
 
-def test_mqtt_handler_consume_resumes_existing_session_without_resubscribe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mqtt_handler_consume_resumes_existing_session_without_resubscribe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = install_dummy_client(
         monkeypatch,
         [
@@ -375,7 +412,9 @@ def test_mqtt_handler_consume_reconnects_without_resubscribing_existing_session(
     assert client.call_history["reconnect_calls"] == 1
 
 
-def test_mqtt_handler_close_consumer_disconnects_client(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mqtt_handler_close_consumer_disconnects_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = install_dummy_client(monkeypatch, [("connect", False)])
 
     handler = mqtt_handler.MqttHandler()
@@ -397,7 +436,13 @@ def test_mqtt_handler_on_connect_sets_error_for_nonzero_reason_code() -> None:
     client = DummyClient()
 
     invoke_handler_method(
-        handler, "_on_connect", cast(Any, client), None, cast(Any, SimpleNamespace(session_present=False)), 5, None
+        handler,
+        "_on_connect",
+        cast(Any, client),
+        None,
+        cast(Any, SimpleNamespace(session_present=False)),
+        5,
+        None,
     )
 
     error = get_handler_attr(handler, "_MqttHandler__consumer_state").connect_error
@@ -428,7 +473,13 @@ def test_mqtt_handler_on_connect_requires_topic_for_new_session() -> None:
     client = DummyClient()
 
     invoke_handler_method(
-        handler, "_on_connect", cast(Any, client), None, cast(Any, SimpleNamespace(session_present=False)), 0, None
+        handler,
+        "_on_connect",
+        cast(Any, client),
+        None,
+        cast(Any, SimpleNamespace(session_present=False)),
+        0,
+        None,
     )
 
     error = get_handler_attr(handler, "_MqttHandler__consumer_state").connect_error
@@ -443,7 +494,13 @@ def test_mqtt_handler_on_connect_sets_error_when_subscribe_fails() -> None:
     client.results["subscribe"] = 7
 
     invoke_handler_method(
-        handler, "_on_connect", cast(Any, client), None, cast(Any, SimpleNamespace(session_present=False)), 0, None
+        handler,
+        "_on_connect",
+        cast(Any, client),
+        None,
+        cast(Any, SimpleNamespace(session_present=False)),
+        0,
+        None,
     )
 
     error = get_handler_attr(handler, "_MqttHandler__consumer_state").connect_error
@@ -468,303 +525,23 @@ def test_mqtt_handler_on_disconnect_handles_clean_disconnect() -> None:
 
 
 def test_mqtt_handler_on_disconnect_without_state_is_noop() -> None:
-    invoke_handler_method(mqtt_handler.MqttHandler(), "_on_disconnect", cast(Any, DummyClient()), None, None, 0, None)
+    invoke_handler_method(
+        mqtt_handler.MqttHandler(),
+        "_on_disconnect",
+        cast(Any, DummyClient()),
+        None,
+        None,
+        0,
+        None,
+    )
 
 
 def test_mqtt_handler_on_message_without_queue_is_noop() -> None:
     handler = mqtt_handler.MqttHandler()
-    invoke_handler_method(handler, "_on_message", cast(Any, DummyClient()), None, make_dummy_message(b"ignored"))
-
-
-def test_mqtt_handler_ensure_consumer_client_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = install_dummy_client(monkeypatch, [])
-    client.results["connect"] = 4
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("t", "h", "u", "p")
-
-    with pytest.raises(RuntimeError, match="connect failed"):
-        invoke_handler_method(handler, "_ensure_consumer_client")
-
-
-def test_mqtt_handler_wait_for_connection_raises_stored_error() -> None:
-    handler = mqtt_handler.MqttHandler()
-    set_handler_attr(
+    invoke_handler_method(
         handler,
-        "_MqttHandler__consumer_state",
-        build_consumer_state(client_id="client-id", connect_error=RuntimeError("boom")),
+        "_on_message",
+        cast(Any, DummyClient()),
+        None,
+        make_dummy_message(b"ignored"),
     )
-
-    with pytest.raises(RuntimeError, match="boom"):
-        invoke_handler_method(handler, "_wait_for_connection", cast(Any, DummyClient()))
-
-    assert get_handler_attr(handler, "_MqttHandler__consumer_state").connect_error is None
-
-
-def test_mqtt_handler_wait_for_connection_requires_state() -> None:
-    with pytest.raises(RuntimeError, match="not initialized"):
-        invoke_handler_method(mqtt_handler.MqttHandler(), "_wait_for_connection", cast(Any, DummyClient()))
-
-
-def test_mqtt_handler_wait_for_connection_raises_on_loop_error() -> None:
-    handler = mqtt_handler.MqttHandler()
-    set_handler_attr(
-        handler,
-        "_MqttHandler__consumer_state",
-        build_consumer_state(client_id="client-id"),
-    )
-    client = DummyClient()
-    client.events = [("loop_error", 6)]
-
-    with pytest.raises(RuntimeError, match="loop failed during connect"):
-        invoke_handler_method(handler, "_wait_for_connection", cast(Any, client))
-
-
-def test_mqtt_handler_get_next_message_requires_initialized_consumer() -> None:
-    with pytest.raises(RuntimeError, match="not initialized"):
-        invoke_handler_method(mqtt_handler.MqttHandler(), "_get_next_message")
-
-
-def test_mqtt_handler_get_next_message_requires_state_after_client_init(monkeypatch: pytest.MonkeyPatch) -> None:
-    handler = mqtt_handler.MqttHandler()
-
-    def _dummy_client() -> DummyClient:
-        return DummyClient()
-
-    monkeypatch.setattr(handler, "_ensure_consumer_client", _dummy_client)
-
-    with pytest.raises(RuntimeError, match="not initialized"):
-        invoke_handler_method(handler, "_get_next_message")
-
-
-def test_mqtt_handler_get_next_message_requires_queue(monkeypatch: pytest.MonkeyPatch) -> None:
-    handler = mqtt_handler.MqttHandler()
-    set_handler_attr(
-        handler,
-        "_MqttHandler__consumer_state",
-        build_consumer_state(client_id="client-id"),
-    )
-    get_handler_attr(handler, "_MqttHandler__consumer_state").messages = None
-
-    def _dummy_client() -> DummyClient:
-        return DummyClient()
-
-    monkeypatch.setattr(handler, "_ensure_consumer_client", _dummy_client)
-
-    with pytest.raises(RuntimeError, match="message queue not initialized"):
-        invoke_handler_method(handler, "_get_next_message")
-
-
-def test_mqtt_handler_get_next_message_raises_stored_connect_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    handler = mqtt_handler.MqttHandler()
-    set_handler_attr(
-        handler,
-        "_MqttHandler__consumer_state",
-        build_consumer_state(
-            client_id="client-id",
-            messages=mqtt_handler.queue.Queue(),
-            connected=True,
-            connect_error=RuntimeError("connect boom"),
-        ),
-    )
-
-    def _dummy_client() -> DummyClient:
-        return DummyClient()
-
-    monkeypatch.setattr(handler, "_ensure_consumer_client", _dummy_client)
-
-    with pytest.raises(RuntimeError, match="connect boom"):
-        invoke_handler_method(handler, "_get_next_message")
-
-    assert get_handler_attr(handler, "_MqttHandler__consumer_state").connect_error is None
-
-
-def test_mqtt_handler_get_next_message_raises_on_reconnect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MQTT_GIVE_UP_SECS", "0")
-    handler = mqtt_handler.MqttHandler()
-    client = DummyClient()
-    client.results["reconnect"] = 9
-    set_handler_attr(
-        handler,
-        "_MqttHandler__consumer_state",
-        build_consumer_state(client_id="client-id", messages=mqtt_handler.queue.Queue(), connected=False),
-    )
-
-    def _dummy_client() -> DummyClient:
-        return client
-
-    monkeypatch.setattr(handler, "_ensure_consumer_client", _dummy_client)
-
-    with pytest.raises(RuntimeError, match="reconnect failed"):
-        invoke_handler_method(handler, "_get_next_message")
-
-
-def test_mqtt_handler_close_consumer_clears_state_without_client() -> None:
-    handler = mqtt_handler.MqttHandler()
-    set_handler_attr(handler, "_MqttHandler__consumer_state", build_consumer_state(client_id="client-id"))
-
-    handler.close_consumer()
-    assert get_handler_attr(handler, "_MqttHandler__consumer_state") is None
-
-
-def test_mqtt_handler_consume_recovers_after_loop_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = install_dummy_client(
-        monkeypatch,
-        [
-            ("connect", False),
-            ("loop_error", 4),
-            ("connect", True),
-            ("message", make_dummy_message(b'{"k": 5}', topic="sensor/loop-error")),
-        ],
-    )
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("t", "h", "u", "p")
-
-    result = next(handler.consume())
-    assert result["data"] == {"k": 5}
-    assert client.call_history["reconnect_calls"] == 1
-
-
-def test_mqtt_handler_reconnect_retries_after_oserror_and_resubscribes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Retry an OSError with backoff, then resubscribe if the session was lost."""
-    client = install_dummy_client(
-        monkeypatch,
-        [
-            ("connect", False),
-            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
-            ("disconnect", 1),
-            ("connect", False),  # broker lost the session -> resubscribe
-            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
-        ],
-    )
-    failures = iter([OSError("dns failure"), OSError("dns failure")])
-
-    original_reconnect = client.reconnect
-
-    def flaky_reconnect() -> int:
-        failure = next(failures, None)
-        if failure is not None:
-            raise failure
-        return original_reconnect()
-
-    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
-    sleeps: list[float] = []
-    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("sensor/a", "host", "user", "pass")
-    generator = handler.consume()
-    first = next(generator)
-    second = next(generator)
-
-    assert first["data"] == {"k": 1}
-    assert second["data"] == {"k": 2}
-    # Two failed attempts slept with exponential backoff before success.
-    assert sleeps == [1.0, 2.0]
-    # Initial subscribe + post-reconnect resubscribe (session_present=False).
-    assert [topic for topic, _qos in client.call_history["subscribe_calls"]] == ["sensor/a", "sensor/a"]
-
-
-def test_mqtt_handler_reconnect_gives_up_after_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A prolonged disconnection raises so the worker can restart."""
-    client = install_dummy_client(
-        monkeypatch,
-        [
-            ("connect", False),
-            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
-            ("disconnect", 1),
-        ],
-    )
-
-    def always_down() -> int:
-        raise OSError("broker unreachable")
-
-    client.reconnect = always_down  # type: ignore[method-assign]
-    monkeypatch.setenv("MQTT_RECONNECT_GIVE_UP_SECS", "0")
-    monkeypatch.setattr(mqtt_handler.time, "sleep", lambda _delay: None)
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("sensor/a", "host", "user", "pass")
-    generator = handler.consume()
-    next(generator)
-
-    with pytest.raises(RuntimeError, match="could not reconnect within"):
-        next(generator)
-
-
-def test_mqtt_handler_reconnect_retries_on_error_code(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A non-success rc from reconnect() is retried, not raised immediately."""
-    client = install_dummy_client(
-        monkeypatch,
-        [
-            ("connect", False),
-            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
-            ("disconnect", 1),
-            ("connect", True),  # broker kept the session -> no resubscribe
-            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
-        ],
-    )
-    rcs = iter([mqtt_handler.mqtt.MQTT_ERR_NO_CONN])
-    original_reconnect = client.reconnect
-
-    def flaky_reconnect() -> int:
-        try:
-            return next(rcs)
-        except StopIteration:
-            return original_reconnect()
-
-    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
-    sleeps: list[float] = []
-    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("sensor/a", "host", "user", "pass")
-    generator = handler.consume()
-    next(generator)
-    second = next(generator)
-
-    assert second["data"] == {"k": 2}
-    assert sleeps == [1.0]
-    assert len(client.call_history["subscribe_calls"]) == 1
-
-
-def test_mqtt_handler_reconnect_backoff_caps_at_max(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = install_dummy_client(
-        monkeypatch,
-        [
-            ("connect", False),
-            ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
-            ("disconnect", 1),
-            ("connect", True),
-            ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
-        ],
-    )
-    failures = iter([OSError("down")] * 7)
-    original_reconnect = client.reconnect
-
-    def flaky_reconnect() -> int:
-        failure = next(failures, None)
-        if failure is not None:
-            raise failure
-        return original_reconnect()
-
-    client.reconnect = flaky_reconnect  # type: ignore[method-assign]
-    sleeps: list[float] = []
-    monkeypatch.setattr(mqtt_handler.time, "sleep", sleeps.append)
-
-    handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("sensor/a", "host", "user", "pass")
-    generator = handler.consume()
-    next(generator)
-    next(generator)
-
-    assert sleeps == [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0]
-
-
-def test_mqtt_handler_reconnect_give_up_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MQTT_RECONNECT_GIVE_UP_SECS", "not-a-number")
-    handler = mqtt_handler.MqttHandler()
-    assert invoke_handler_method(handler, "_reconnect_give_up_secs") == mqtt_handler.DEFAULT_RECONNECT_GIVE_UP_SECS

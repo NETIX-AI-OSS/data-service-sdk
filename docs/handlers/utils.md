@@ -11,11 +11,29 @@ Document reusable low-level integrations for DB writes, Kafka IO, and MQTT IO us
 - `data_service_sdk.handlers.utils.mqtt_client.create_mqtt_client`
 - `data_service_sdk.handlers.utils.mqtt_client.MqttPublisher`
 
-`MqttPublisher` keeps the network loop alive and raises `MqttPublishStalledError`
-after repeated failed publish attempts. Set `MQTT_GIVE_UP_SECS` to control the
-deadline (default 300 seconds). The older `MQTT_PUBLISH_GIVE_UP_SECS` and
-`MQTT_RECONNECT_GIVE_UP_SECS` names remain supported, with deprecation warnings.
-The SDK's MQTT consumer uses the same deadline setting.
+`MqttPublisher` starts an asynchronous network loop and keeps retrying broker
+connections by default. It checks queued delivery during `publish()` and
+`check_health()` and restarts a stalled network loop after 300 seconds without
+discarding Paho's queued QoS 1/2 packets. Call `check_health()` from an idle
+worker's regular poll loop. Set `MQTT_GIVE_UP_SECS` to a finite number of seconds
+to restore the previous fail-after-deadline behavior; `0` means fail on the
+first error. Explicit `inf` means retry indefinitely. The older
+`MQTT_PUBLISH_GIVE_UP_SECS` and `MQTT_RECONNECT_GIVE_UP_SECS` names remain
+supported, with deprecation warnings. The SDK's MQTT consumer uses the same
+setting.
+
+The outgoing queue is capped at 4,096 QoS 1/2 packets. `publish()` returns
+`None` when it cannot confirm acceptance (for example, QoS 0 while offline,
+a full queue, or a socket exception); the caller must retry or persist that
+payload. A socket exception can occur after enqueueing, so retries can produce
+duplicates and consumers should handle them idempotently. A returned
+`MQTTMessageInfo` means Paho accepted the packet, not that the broker
+acknowledged it. An offline QoS 1/2 packet can return an info object with
+`rc=MQTT_ERR_NO_CONN` while remaining in Paho's queue. Its
+`is_published()`/`wait_for_publish()` methods may raise because of that original
+return code, even after delivery; `check_health()` tracks it separately. Delivery
+across process restarts requires a durable upstream queue; QoS 0 can be lost
+during disconnection. `stop()` cancels recovery and disconnects the client.
 
 ## Minimal Configuration Example
 DB handlers:
