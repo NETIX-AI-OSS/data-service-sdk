@@ -4,7 +4,7 @@ import importlib
 import sys
 from types import ModuleType
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 
 _MODULE_ALIASES = {
     "data_service_sdk.types": "framework.types",
