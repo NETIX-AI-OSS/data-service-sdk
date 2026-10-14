@@ -10,6 +10,32 @@ This project uses two-component release tags (`v1.5`) and three-component packag
 
 ## Unreleased
 
+## 1.7.0 — 2026-10-14 (tag `v1.7`)
+
+### Fixed
+
+- `WorkerHandler.deploy` works with kubernetes 37. The SDK now pins k8s-utils-py v1.2, which
+  builds `V1Deployment` whole and keeps the ConfigMap namespace in `metadata`. k8s-utils-py v1.0
+  failed on 37's pydantic client with `spec Field required` and
+  `body.namespace Extra inputs are not permitted`.
+
+### Changed
+
+- Worker deployment is also tested through the real k8s-utils-py and kubernetes client classes,
+  with only the HTTP pool stubbed.
+- The dev lock moves to kubernetes 37.0.1.
+
+## 1.6.0 — 2026-09-27 (tag `v1.6`)
+
+### Added
+
+- A shared paho v2 MQTT client factory and long-lived publisher that recovers indefinitely by
+  default. Recovery is bounded by `MQTT_GIVE_UP_SECS`; `MQTT_PUBLISH_GIVE_UP_SECS` and
+  `MQTT_RECONNECT_GIVE_UP_SECS` remain as deprecated aliases.
+
+### Changed
+
+- Requires paho-mqtt `>=2,<3`.
 - Collapsed multi-line comments to single-line across the package.
 - Cleaned up docs, license headers and docstrings.
 - CI: migrated `ubuntu-latest` jobs to the `build-only` runner.

@@ -5,6 +5,7 @@ import json
 from typing import Any, Dict, List, cast
 
 import pytest
+from kubernetes.client import ApiException
 
 from framework.worker import base_worker
 from framework.worker.deployment import deployment_handler
@@ -308,12 +309,9 @@ def test_worker_handler_delete_config_raises_after_retries(monkeypatch: pytest.M
         deployment_handler.WorkerHandler.delete_config(cast(Any, DummyWorker()))
 
 
-def test_worker_handler_is_not_found_error_handles_invalid_body() -> None:
-    class DummyApiException(Exception):
-        def __init__(self, body: str | None) -> None:
-            super().__init__(body)
-            self.body = body
-
+@pytest.mark.parametrize("body", [None, "not-json"])
+def test_worker_handler_is_not_found_error_handles_invalid_body(body: str | None) -> None:
+    error = ApiException(status=500)
+    error.body = body
     is_not_found = deployment_handler.WorkerHandler._is_not_found_error  # pylint: disable=protected-access
-    assert is_not_found(DummyApiException(None)) is False
-    assert is_not_found(DummyApiException("not-json")) is False
+    assert is_not_found(error) is False
