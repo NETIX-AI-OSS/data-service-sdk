@@ -128,22 +128,27 @@ class MqttHandler:
 
         state.connected = True
         session_present = bool(flags.session_present)
-        if session_present:
-            logger.debug("MQTT consumer resumed existing session topic=%s", self.__topic_name)
-            return
 
         if self.__topic_name is None:
             state.connected = False
             state.connect_error = RuntimeError("MQTT consumer topic not configured")
             return
 
+        # Always (re)subscribe, even when the broker resumed a persistent session. A resumed session
+        # is no proof the subscription exists: if the previous connection dropped between CONNACK and
+        # SUBACK, the broker keeps a session with no subscriptions and the consumer would otherwise
+        # stay connected but silent. A duplicate SUBSCRIBE on an existing session is idempotent.
         result, _mid = client.subscribe(self.__topic_name, qos=0)
         if result != mqtt.MQTT_ERR_SUCCESS:
             state.connected = False
             state.connect_error = RuntimeError(f"MQTT consumer subscribe failed: {mqtt.error_string(result)}")
             return
 
-        logger.debug("MQTT consumer subscribed topic=%s", self.__topic_name)
+        logger.info(
+            "MQTT consumer subscribed topic=%s session_present=%s",
+            self.__topic_name,
+            session_present,
+        )
 
     def _on_disconnect(
         self,
@@ -274,7 +279,7 @@ class MqttHandler:
             try:
                 result = client.connect(self.__host, keepalive=25) if initial else client.reconnect()
                 if result == mqtt.MQTT_ERR_SUCCESS:
-                    # Re-runs connect handshake; _on_connect re-subscribes if session wasn't kept
+                    # Re-runs connect handshake; _on_connect re-subscribes on every connect
                     self._wait_for_connection(client, deadline=deadline)
                     logger.info("MQTT consumer connected after %s attempt(s)", attempt)
                     return

@@ -502,7 +502,7 @@ def test_mqtt_handler_reconnect_retries_on_error_code(
             ("connect", False),
             ("message", make_dummy_message(b'{"k": 1}', topic="sensor/a")),
             ("disconnect", 1),
-            ("connect", True),  # broker kept the session -> no resubscribe
+            ("connect", True),  # broker kept the session -> still resubscribe
             ("message", make_dummy_message(b'{"k": 2}', topic="sensor/a")),
         ],
     )
@@ -525,7 +525,8 @@ def test_mqtt_handler_reconnect_retries_on_error_code(
 
     assert second["data"] == {"k": 2}
     assert sleeps == [1.0]
-    assert len(client.call_history["subscribe_calls"]) == 1
+    # Initial subscribe + post-reconnect resubscribe, even though the session was resumed.
+    assert len(client.call_history["subscribe_calls"]) == 2
 
 
 def test_mqtt_handler_reconnect_backoff_caps_at_max(

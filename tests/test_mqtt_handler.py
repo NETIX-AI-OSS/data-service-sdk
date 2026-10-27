@@ -328,9 +328,10 @@ def test_mqtt_handler_reuses_existing_client_across_new_consume_generators(
     assert client.call_history["subscribe_calls"] == [("t", 0)]
 
 
-def test_mqtt_handler_consume_resumes_existing_session_without_resubscribe(
+def test_mqtt_handler_consume_resubscribes_on_resumed_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A resumed persistent session is no proof the subscription survived: subscribe anyway."""
     client = install_dummy_client(
         monkeypatch,
         [
@@ -344,7 +345,7 @@ def test_mqtt_handler_consume_resumes_existing_session_without_resubscribe(
 
     result = next(handler.consume())
     assert result["data"] == {"k": 3}
-    assert not client.call_history["subscribe_calls"]
+    assert client.call_history["subscribe_calls"] == [("t", 0)]
 
 
 def test_mqtt_handler_produce_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -390,9 +391,12 @@ def test_mqtt_handler_normalize_payload_variants() -> None:
     assert normalize_payload(99) == b"99"
 
 
-def test_mqtt_handler_consume_reconnects_without_resubscribing_existing_session(
+def test_mqtt_handler_consume_reconnect_resubscribes_even_when_session_resumed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Regression for the 18 Oct 2026 outage: a connection that dropped between CONNACK and SUBACK left a
+    persistent session with no subscriptions on the broker; the reconnect saw session_present=True and never
+    subscribed, so the worker stayed connected but received nothing. Every connect must subscribe."""
     client = install_dummy_client(
         monkeypatch,
         [
@@ -408,7 +412,7 @@ def test_mqtt_handler_consume_reconnects_without_resubscribing_existing_session(
 
     result = next(handler.consume())
     assert result["data"] == {"k": 4}
-    assert client.call_history["subscribe_calls"] == [("t", 0)]
+    assert client.call_history["subscribe_calls"] == [("t", 0), ("t", 0)]
     assert client.call_history["reconnect_calls"] == 1
 
 
