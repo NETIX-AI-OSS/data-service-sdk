@@ -10,6 +10,12 @@ This project uses two-component release tags (`v1.5`) and three-component packag
 
 ## Unreleased
 
+### Fixed
+
+- MQTT consumer now re-subscribes on every connect, including when the broker resumes a persistent
+  session. A connection that dropped between CONNACK and SUBACK used to leave the worker connected
+  to a session with no subscriptions, receiving nothing until its pod was restarted.
+
 ## 1.7.0 — 2026-10-14 (tag `v1.7`)
 
 ### Fixed
