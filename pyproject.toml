@@ -34,6 +34,11 @@ dev = [
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint.per-file-ignores]
+# Broad exception handling is deliberate in this SDK (crash-isolated workers).
+"framework/**" = ["BLE001"]
+"tests/**" = ["BLE001"]
+
 [tool.pycodestyle]
 max-line-length = 120
 ignore = ["E203", "W503"]

@@ -10,9 +10,9 @@ from unittest.mock import Mock, call
 
 import paho.mqtt.client as mqtt
 import pytest
-
 from data_service_sdk.handlers.utils import mqtt_client  # pylint: disable=import-error
-from framework.handlers.utils.mqtt_client import MqttPublishStalledError, MqttPublisher
+
+from framework.handlers.utils.mqtt_client import MqttPublisher, MqttPublishStalledError
 
 
 def test_public_and_legacy_imports_are_the_same_module() -> None:
@@ -164,9 +164,9 @@ def test_acknowledged_message_is_removed_from_pending_queue(monkeypatch: pytest.
     client.publish.return_value = info
     publisher = MqttPublisher(client, give_up_secs=300)
     publisher.publish("telemetry", "1")
-    assert len(getattr(publisher, "_pending")) == 1
+    assert len(publisher._pending) == 1
     publisher.publish("telemetry", "2")
-    assert len(getattr(publisher, "_pending")) == 0
+    assert len(publisher._pending) == 0
 
 
 def test_pending_queue_has_a_hard_limit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,12 +268,12 @@ def test_real_paho_offline_qos_one_is_accepted_and_later_drained() -> None:
     info = publisher.publish("telemetry", "value", qos=1)
     assert info is not None
     assert info.rc == mqtt.MQTT_ERR_NO_CONN
-    assert len(getattr(publisher, "_pending")) == 1
+    assert len(publisher._pending) == 1
     # Paho retains this packet while offline. Its public is_published() still
     # raises after an acknowledgement because the initial rc remains NO_CONN.
     info._set_as_published()  # pylint: disable=protected-access
     publisher.check_health()
-    assert len(getattr(publisher, "_pending")) == 0
+    assert len(publisher._pending) == 0
 
 
 def test_paho_queue_full_returns_backpressure_when_another_user_filled_it(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,7 +282,7 @@ def test_paho_queue_full_returns_backpressure_when_another_user_filled_it(monkey
     assert client.publish("other", "first", qos=1).rc == mqtt.MQTT_ERR_NO_CONN
     publisher = MqttPublisher(client)
     assert publisher.publish("telemetry", "second", qos=1) is None
-    assert not getattr(publisher, "_pending")
+    assert not publisher._pending
 
 
 def test_infinite_outage_applies_backpressure_and_recovers_without_clearing_queue(
@@ -303,7 +303,7 @@ def test_infinite_outage_applies_backpressure_and_recovers_without_clearing_queu
     assert client.publish.call_count == 1
     now[0] = 301.0
     publisher.check_health()
-    assert len(getattr(publisher, "_pending")) == 1
+    assert len(publisher._pending) == 1
     client.disconnect.assert_called_once_with()
     client.loop_stop.assert_called_once_with()
     assert client.connect_async.call_count == 2
@@ -380,7 +380,7 @@ def test_stop_during_recovery_wait_does_not_restart_client(monkeypatch: pytest.M
     publisher = MqttPublisher(client)
     publisher.connect("broker")
     now[0] = 301.0
-    lock = getattr(publisher, "_lifecycle_lock")
+    lock = publisher._lifecycle_lock
     finished = threading.Event()
 
     def check() -> None:
@@ -393,13 +393,13 @@ def test_stop_during_recovery_wait_does_not_restart_client(monkeypatch: pytest.M
         # The health check has selected a recovery and is waiting for the
         # lifecycle lock. Cancellation wins before it can restart the loop.
         for _ in range(1000):
-            if getattr(publisher, "_last_recovery_time") is not None:
+            if publisher._last_recovery_time is not None:
                 break
             time.sleep(0.001)
-        assert getattr(publisher, "_last_recovery_time") == 301.0
-        with getattr(publisher, "_state_lock"):
-            setattr(publisher, "_stopped", True)
-            setattr(publisher, "_connection", None)
+        assert publisher._last_recovery_time == 301.0
+        with publisher._state_lock:
+            publisher._stopped = True
+            publisher._connection = None
     thread.join(timeout=2)
     assert finished.is_set()
     client.loop_stop.assert_not_called()
@@ -419,7 +419,7 @@ def test_callback_stop_during_recovery_join_does_not_deadlock_or_reconnect(
     callback_done = threading.Event()
 
     def loop_stop() -> None:
-        if threading.current_thread() is not getattr(client, "_thread"):
+        if threading.current_thread() is not client._thread:
             joining.set()
             assert callback_done.wait(timeout=2)
 
@@ -431,7 +431,7 @@ def test_callback_stop_during_recovery_join_does_not_deadlock_or_reconnect(
         callback_done.set()
 
     callback_thread = threading.Thread(target=stop_from_callback, daemon=True)
-    setattr(client, "_thread", callback_thread)
+    client._thread = callback_thread
     callback_thread.start()
     recovery_thread = threading.Thread(target=publisher.check_health, daemon=True)
     recovery_thread.start()

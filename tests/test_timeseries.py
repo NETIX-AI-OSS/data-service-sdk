@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-
-from typing import Any, Dict, List
+from typing import Any
 
 import pytest
 from redis import ResponseError
@@ -12,10 +11,10 @@ from framework.utils import timeseries
 
 class DummyRedisTS:
     def __init__(self) -> None:
-        self.created: List[Dict[str, Any]] = []
-        self.added: List[Dict[str, Any]] = []
+        self.created: list[dict[str, Any]] = []
+        self.added: list[dict[str, Any]] = []
         self.get_value: Any = (1, 2)
-        self.revrange_values: List[Any] = [(1, 10), (2, 20)]
+        self.revrange_values: list[Any] = [(1, 10), (2, 20)]
         self.raise_on_create = False
         self.raise_on_add = False
 

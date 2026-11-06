@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, List, cast
+from typing import Any, cast
 
 import pytest
 
@@ -154,7 +154,7 @@ def install_dummy_client(monkeypatch: pytest.MonkeyPatch, events: list[tuple[str
 
 
 def build_consumer_state(**kwargs: Any) -> Any:
-    return getattr(mqtt_handler, "_MqttConsumerState")(**kwargs)
+    return mqtt_handler._MqttConsumerState(**kwargs)
 
 
 def invoke_handler_method(handler: mqtt_handler.MqttHandler, name: str, *args: Any) -> Any:
@@ -349,7 +349,7 @@ def test_mqtt_handler_consume_resubscribes_on_resumed_session(
 
 
 def test_mqtt_handler_produce_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: List[Any] = []
+    calls: list[Any] = []
 
     def fake_single(*_args: Any, **_kwargs: Any) -> None:
         calls.append(("ok", _args, _kwargs))
@@ -385,7 +385,7 @@ def test_mqtt_handler_requires_init() -> None:
 
 
 def test_mqtt_handler_normalize_payload_variants() -> None:
-    normalize_payload = getattr(mqtt_handler.MqttHandler, "_normalize_payload")
+    normalize_payload = mqtt_handler.MqttHandler._normalize_payload
     assert normalize_payload(bytearray(b"a")) == b"a"
     assert normalize_payload(None) == b""
     assert normalize_payload(99) == b"99"

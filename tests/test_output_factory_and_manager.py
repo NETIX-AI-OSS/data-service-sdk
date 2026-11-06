@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # pylint: disable=no-member
-
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import pytest
 
@@ -12,17 +11,17 @@ from framework.handlers.output.type import OUTPUT_CONTROLLER_TYPE
 
 
 class DummyKafkaController:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
 
 class DummyTsdbController:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
 
 class DummyApiController:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
 
@@ -40,7 +39,7 @@ class DummyMqttHandler:
 def test_output_factory_creates_kafka_controller(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output_factory.kafka_controller, "KafkaOutputController", DummyKafkaController)
 
-    config: Dict[str, Any] = {"bootstrap_servers": "b", "topic": "t"}
+    config: dict[str, Any] = {"bootstrap_servers": "b", "topic": "t"}
     controller = output_factory.Factory.get_output_controller(OUTPUT_CONTROLLER_TYPE["kafka"], config)
 
     assert isinstance(controller, DummyKafkaController)
@@ -49,7 +48,7 @@ def test_output_factory_creates_kafka_controller(monkeypatch: pytest.MonkeyPatch
 def test_output_factory_creates_tsdb_controller(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output_factory.tsdb_controller, "TsdbOutputController", DummyTsdbController)
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "user": "u",
         "password": "p",
         "host": "h",
@@ -66,7 +65,7 @@ def test_output_factory_creates_tsdb_controller(monkeypatch: pytest.MonkeyPatch)
 def test_output_factory_creates_api_controller(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output_factory.api_controller, "ApiOutputController", DummyApiController)
 
-    config: Dict[str, Any] = {"url": "u", "url_batch": "ub", "timeout": 1.0}
+    config: dict[str, Any] = {"url": "u", "url_batch": "ub", "timeout": 1.0}
     controller = output_factory.Factory.get_output_controller(OUTPUT_CONTROLLER_TYPE["api"], config)
 
     assert isinstance(controller, DummyApiController)
@@ -75,7 +74,7 @@ def test_output_factory_creates_api_controller(monkeypatch: pytest.MonkeyPatch) 
 def test_output_factory_creates_mqtt_controller(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(output_factory, "MqttHandler", DummyMqttHandler)
 
-    config: Dict[str, Any] = {"topic": "t", "host": "h", "user": "u", "password": "p"}
+    config: dict[str, Any] = {"topic": "t", "host": "h", "user": "u", "password": "p"}
     controller = cast(
         DummyMqttHandler, output_factory.Factory.get_output_controller(OUTPUT_CONTROLLER_TYPE["mqtt"], config)
     )
@@ -84,7 +83,7 @@ def test_output_factory_creates_mqtt_controller(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_output_manager_produce_and_batch(monkeypatch: pytest.MonkeyPatch) -> None:
-    produced: List[Any] = []
+    produced: list[Any] = []
 
     class DummyProducer:
         def produce(self, msg: Any) -> None:

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from typing import Dict, Union
-
 import pytest
+
 from framework.handlers.input.state_machine import StateMachineInputController
 from framework.types import StateMachineConfig
 from framework.utils.expression import Expression
 
 
 def test_expression_evaluate_all_ops() -> None:
-    mapping: Dict[str, Union[int, float, bool]] = {"a": 5, "b": 2, "c": 5}
+    mapping: dict[str, int | float | bool] = {"a": 5, "b": 2, "c": 5}
     assert Expression.evaluate(["a", "b", "-"], mapping) == 3
     mapping = {"x": 2, "y": 8}
     assert Expression.evaluate(["x", "y", "<"], mapping) is True

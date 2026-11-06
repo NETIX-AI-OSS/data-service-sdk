@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Mapping, Optional, Union
+from collections.abc import Mapping
+
 from transitions import Machine
 
-from framework.utils.expression import Expression
 from framework.types import StateMachineConfig
+from framework.utils.expression import Expression
 
 logger = logging.getLogger(__name__)
 
@@ -14,16 +15,16 @@ class StateMachineInputController:
     state: str
 
     def __init__(self, config: StateMachineConfig, initial_state: str) -> None:
-        self.result: Optional[Union[int, float, bool]] = None
+        self.result: int | float | bool | None = None
         self.config: StateMachineConfig = config
         transitions_dict = config["transitions"]
         transitions = []
 
-        self.source_destination_mapping: Dict[str, List[str]] = {}
+        self.source_destination_mapping: dict[str, list[str]] = {}
         for source in config["states"]:
             self.source_destination_mapping[source] = []
 
-        for transition_key, _ in config["transitions"].items():
+        for transition_key in config["transitions"]:
             transition = transitions_dict[transition_key]
             logger.debug(transition)
 
@@ -44,7 +45,7 @@ class StateMachineInputController:
         logger.debug(machine.states)
         self.state = initial_state
 
-    def tick(self, meta: str, variable_value_mapping: Mapping[str, Union[int, float, bool]]) -> Union[int, float, bool]:
+    def tick(self, meta: str, variable_value_mapping: Mapping[str, int | float | bool]) -> int | float | bool:
         trigger_block = self.config["transitions"][meta]
         logger.debug("variable_value_mapping")
         logger.debug(variable_value_mapping)
@@ -61,7 +62,7 @@ class StateMachineInputController:
     # 	                  [0]['equation'], variable_value_mapping)
     # 	return True
 
-    def process(self, variable_value_mapping: Mapping[str, Union[int, float, bool]]) -> Union[int, float, bool]:
+    def process(self, variable_value_mapping: Mapping[str, int | float | bool]) -> int | float | bool:
         logger.debug(self.state)
         logger.debug(self.source_destination_mapping)
 

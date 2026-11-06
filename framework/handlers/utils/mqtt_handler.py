@@ -1,26 +1,28 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import queue
-import hashlib
-import time
 import threading
+import time
+from collections.abc import Generator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, Generator, Optional, cast
+from datetime import UTC, datetime
+from typing import Any, cast
 
 import paho.mqtt.client as mqtt
 from paho.mqtt import publish
+
 from framework.handlers.utils.mqtt_client import (
     DEFAULT_GIVE_UP_SECS,
     create_mqtt_client,
     mqtt_give_up_secs,
 )
 from framework.types import (
-    MqttConsumeError,
     MqttConsumedMessage,
+    MqttConsumeError,
     MqttPacketMetadata,
     MqttPayloadFormat,
 )
@@ -45,10 +47,10 @@ class _MqttConsumerState:
 
 
 class MqttHandler:
-    __topic_name: Optional[str] = None
-    __host: Optional[str] = None
-    __auth: Optional[Dict[str, str]] = None
-    __consumer_state: Optional[_MqttConsumerState] = None
+    __topic_name: str | None = None
+    __host: str | None = None
+    __auth: dict[str, str] | None = None
+    __consumer_state: _MqttConsumerState | None = None
 
     def init_consumer(self, topic: str, host: str, user: str, password: str) -> None:
         self.close_consumer()
@@ -66,14 +68,14 @@ class MqttHandler:
     def _extract_message_metadata(
         msg_obj: Any, subscription_topic: str, host: str, payload: bytes
     ) -> MqttPacketMetadata:
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         return {
             "topic": str(msg_obj.topic or ""),
             "subscription_topic": subscription_topic,
             "host": host,
-            "qos": cast(Optional[int], msg_obj.qos),
+            "qos": cast(int | None, msg_obj.qos),
             "retain": bool(msg_obj.retain),
-            "mid": cast(Optional[int], msg_obj.mid),
+            "mid": cast(int | None, msg_obj.mid),
             "dup": bool(msg_obj.dup),
             "payload_size_bytes": len(payload),
             "received_at_ms": int(current_time.timestamp() * 1000),
@@ -312,7 +314,7 @@ class MqttHandler:
             self.__consumer_state.client.disconnect()
         self.__consumer_state = None
 
-    def consume(self) -> Generator[MqttConsumedMessage, None, None]:
+    def consume(self) -> Generator[MqttConsumedMessage]:
         logger.debug("Mqtt consume created")
         if self.__topic_name is None or self.__host is None or self.__auth is None:
             raise RuntimeError("MQTT consumer not initialized")

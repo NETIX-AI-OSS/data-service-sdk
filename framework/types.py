@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Mapping, Protocol, Sequence, TypedDict
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, Protocol, TypedDict
 
 
 class ConditionConfig(TypedDict):
-    equation: List[str]
+    equation: list[str]
 
 
 class TransitionConfig(TypedDict):
     trigger: str
     source: str
     dest: str
-    conditions_config: List[ConditionConfig]
+    conditions_config: list[ConditionConfig]
 
 
 class StateMachineConfig(TypedDict):
-    states: List[str]
-    transitions: Dict[str, TransitionConfig]
+    states: list[str]
+    transitions: dict[str, TransitionConfig]
 
 
 class ExpressionConfig(TypedDict):
-    equation: List[str]
+    equation: list[str]
 
 
 class TsdbTableColumn(TypedDict, total=False):
@@ -36,7 +37,7 @@ class TsdbOutputConfig(TypedDict):
     port: str
     db: str
     table_name: str
-    table_schema: List[TsdbTableColumn]
+    table_schema: list[TsdbTableColumn]
 
 
 class KafkaOutputConfig(TypedDict):
@@ -108,7 +109,7 @@ class KafkaPacketMetadata(TypedDict):
     timestamp_type: int | None
     key_text: str | None
     key_bytes_b64: str | None
-    headers: List[KafkaHeaderMetadata]
+    headers: list[KafkaHeaderMetadata]
     payload_size_bytes: int
     received_at_ms: int
     received_at_iso: str

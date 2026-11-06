@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
-
 from test_mqtt_handler import (
     DummyClient,
     build_consumer_state,
@@ -14,6 +13,7 @@ from test_mqtt_handler import (
     record_retry_waits,
     set_handler_attr,
 )
+
 from framework.handlers.utils import mqtt_handler
 
 
@@ -313,8 +313,8 @@ def test_mqtt_handler_get_next_message_recovers_from_stored_connect_error(
 
     client = DummyClient()
     client.events = [("connect", True), ("message", make_dummy_message(b"42"))]
-    client.on_connect = getattr(handler, "_on_connect")
-    client.on_message = getattr(handler, "_on_message")
+    client.on_connect = handler._on_connect
+    client.on_message = handler._on_message
 
     def _dummy_client() -> DummyClient:
         return client

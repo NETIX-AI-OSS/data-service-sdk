@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from time import sleep
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any
 
 import sqlalchemy
 from sqlalchemy import Column, MetaData, Table, create_engine
@@ -32,7 +33,7 @@ class TableHandler:  # pragma: no cover
         # If table don't exist, Create.
         if not sqlalchemy.inspect(engine).has_table(table_name):
             column_counter = 0
-            columns: List[Column] = []
+            columns: list[Column] = []
             for item in schema:
                 column_counter = column_counter + 1
                 pkey = "pkey" in item and bool(item["pkey"])
@@ -51,28 +52,28 @@ class TableHandler:  # pragma: no cover
 
 class DataHandler:
     db_string: str
-    session: Optional[Session] = None
-    table: Optional[Table] = None
-    table_name: Optional[str] = None
-    column_list: List[str] = []
+    session: Session | None = None
+    table: Table | None = None
+    table_name: str | None = None
+    column_list: list[str] = []  # noqa: RUF012  # always overwritten per-instance before read
 
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self, user: str, password: str, host: str, port: str, db_name: str
     ) -> None:
         self.db_string = "postgresql+psycopg://" + user + ":" + password + "@" + host + ":" + port + "/" + db_name
 
-    def __get_column_names(self) -> List[str]:  # pragma: no cover
+    def __get_column_names(self) -> list[str]:  # pragma: no cover
         if self.table is None:
             return []
         col_list = list(self.table.columns.values())
-        column_list: List[str] = []
+        column_list: list[str] = []
         for col in col_list:
             column_list.append(col.name)
         return column_list
 
-    def __serialize_row(self, value: Mapping[str, Any]) -> Dict[str, Any]:
+    def __serialize_row(self, value: Mapping[str, Any]) -> dict[str, Any]:
         row = value
-        trimmed_row: Dict[str, Any] = {}
+        trimmed_row: dict[str, Any] = {}
         for col in self.column_list:
             if col in row:
                 trimmed_row[col] = row[col]
@@ -118,7 +119,7 @@ class DataHandler:
             self._reset_session()
             self.insert_tsdb(msgs)
 
-    def insert_tsdb_linear(self, msgs: Union[Mapping[str, Any], Sequence[Mapping[str, Any]]]) -> None:
+    def insert_tsdb_linear(self, msgs: Mapping[str, Any] | Sequence[Mapping[str, Any]]) -> None:
         if not msgs:
             return
         if isinstance(msgs, Mapping):
@@ -147,7 +148,7 @@ class DataHandler:
                 self._reset_session()
                 self.insert_tsdb_linear(msg)
 
-    def query_table(self, query: str) -> List[Any]:  # pragma: no cover
+    def query_table(self, query: str) -> list[Any]:  # pragma: no cover
         if self.session is None:
             if self.table_name is None:
                 raise RuntimeError("Table name not initialized")

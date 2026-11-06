@@ -69,10 +69,10 @@ def test_offline_packet_reaches_broker_after_initial_connection_failure() -> Non
             assert acknowledged.wait(10), "Paho must retry and deliver the queued packet"
             # Paho calls on_publish just before marking MQTTMessageInfo done.
             deadline = time.monotonic() + 5
-            while getattr(publisher, "_pending") and time.monotonic() < deadline:
+            while publisher._pending and time.monotonic() < deadline:
                 publisher.check_health()
                 time.sleep(0.01)
-            assert not getattr(publisher, "_pending")
+            assert not publisher._pending
         finally:
             publisher.stop()
             if worker.ident is not None:

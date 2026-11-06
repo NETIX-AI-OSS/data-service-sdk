@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import json
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import pytest
 from kubernetes.client import ApiException
@@ -15,9 +15,9 @@ from framework.worker.utils import config_handler
 
 class DummyTimeseries:
     def __init__(self) -> None:
-        self.values: List[Any] = []
+        self.values: list[Any] = []
 
-    def get_last_n(self, _count: int) -> List[Any]:
+    def get_last_n(self, _count: int) -> list[Any]:
         return self.values
 
     def add(self, value: Any) -> None:
@@ -26,7 +26,7 @@ class DummyTimeseries:
 
 class DummyTimeseriesManager:
     def __init__(self) -> None:
-        self.created: Dict[str, DummyTimeseries] = {}
+        self.created: dict[str, DummyTimeseries] = {}
 
     def get_timeseries_create_if_not_present(self, ts_id: str) -> DummyTimeseries:
         if ts_id not in self.created:
@@ -101,11 +101,11 @@ def test_worker_handler_builds_config_and_names() -> None:
         input_id_internal = "input"
 
     class DummyOutput:
-        def __init__(self, config: Dict[str, Any]) -> None:
+        def __init__(self, config: dict[str, Any]) -> None:
             self.config = config
 
     class DummyOutputs:
-        def all(self) -> List[DummyOutput]:
+        def all(self) -> list[DummyOutput]:
             return [DummyOutput({"k": "v"})]
 
     class DummyType:
@@ -117,8 +117,8 @@ def test_worker_handler_builds_config_and_names() -> None:
         id = 1
         input_type = DummyInputType()
         output_destinations = DummyOutputs()
-        config = {"output": True, "output_config": {"output_handlers_config": []}}
-        full_config: Dict[str, Any] = {}
+        config = {"output": True, "output_config": {"output_handlers_config": []}}  # noqa: RUF012
+        full_config: dict[str, Any] = {}  # noqa: RUF012
         image = ""
         command = ""
         namespace = ""
@@ -134,9 +134,9 @@ def test_worker_handler_builds_config_and_names() -> None:
 
 
 def test_worker_handler_deploy_and_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    deployments: List[Any] = []
-    configmaps: List[Any] = []
-    delete_events: List[str] = []
+    deployments: list[Any] = []
+    configmaps: list[Any] = []
+    delete_events: list[str] = []
 
     class DummyApiException(Exception):
         def __init__(self, body: str) -> None:
@@ -189,7 +189,7 @@ def test_worker_handler_deploy_and_config(monkeypatch: pytest.MonkeyPatch) -> No
         input_id_internal = "input"
 
     class DummyOutputs:
-        def all(self) -> List[Any]:
+        def all(self) -> list[Any]:
             return []
 
     class DummyType:
@@ -201,8 +201,8 @@ def test_worker_handler_deploy_and_config(monkeypatch: pytest.MonkeyPatch) -> No
         id = 2
         input_type = DummyInputType()
         output_destinations = DummyOutputs()
-        config = {"output": False, "output_config": {"output_handlers_config": []}}
-        full_config: Dict[str, Any] = {}
+        config = {"output": False, "output_config": {"output_handlers_config": []}}  # noqa: RUF012
+        full_config: dict[str, Any] = {}  # noqa: RUF012
         image = ""
         command = ""
         namespace = ""

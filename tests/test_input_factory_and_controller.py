@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # pylint: disable=duplicate-code
-
 from framework.handlers.input import expression as expression_controller
 from framework.handlers.input.factory import Factory
 from framework.handlers.input.input_controller_type import INPUT_CONTROLLER_TYPE

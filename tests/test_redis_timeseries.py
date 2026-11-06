@@ -12,7 +12,7 @@ def test_redis_timeseries_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class DummyRedisCluster:
         @classmethod
-        def from_url(cls, url: str, **kwargs: Any) -> "DummyRedisCluster":
+        def from_url(cls, url: str, **kwargs: Any) -> DummyRedisCluster:
             calls["url"] = url
             calls["kwargs"] = kwargs
             return cls()
@@ -40,7 +40,7 @@ def test_redis_timeseries_non_cluster(monkeypatch: pytest.MonkeyPatch) -> None:
 
     class DummyRedis:
         @classmethod
-        def from_url(cls, url: str, **kwargs: Any) -> "DummyRedis":
+        def from_url(cls, url: str, **kwargs: Any) -> DummyRedis:
             calls["url"] = url
             calls["kwargs"] = kwargs
             return cls()
