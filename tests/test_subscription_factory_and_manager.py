@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # pylint: disable=no-member,too-many-arguments,too-many-positional-arguments
-
-from typing import Any, Dict, cast
+from typing import Any, cast
 
 import pytest
 
@@ -45,7 +44,7 @@ class DummyMqttHandler:
 def test_subscription_factory_kafka(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(subscription_factory, "kafka_handler", type("K", (), {"KafkaHandler": DummyKafkaHandler}))
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "kafka_topic_subscribe": "t",
         "kafka_bootstrap_servers": "b1,b2",
         "kafka_ts_group_id": "g",
@@ -64,7 +63,7 @@ def test_subscription_factory_kafka(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_subscription_factory_mqtt(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(subscription_factory, "mqtt_handler", type("M", (), {"MqttHandler": DummyMqttHandler}))
 
-    config: Dict[str, Any] = {"topic": "t", "host": "h", "user": "u", "password": "p"}
+    config: dict[str, Any] = {"topic": "t", "host": "h", "user": "u", "password": "p"}
     controller = cast(
         DummyMqttHandler, subscription_factory.Factory.get_subscription_controller(SUBSCRIPTION_TYPE["mqtt"], config)
     )

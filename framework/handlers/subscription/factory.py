@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from framework.handlers.subscription.type import SUBSCRIPTION_TYPE
 from framework.handlers.utils import kafka_handler, mqtt_handler
@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 class Factory:
     @staticmethod
     def get_subscription_controller(
-        controller_type: str, config: Dict[str, Any]
-    ) -> Optional[Union[kafka_handler.KafkaHandler, mqtt_handler.MqttHandler]]:
+        controller_type: str, config: dict[str, Any]
+    ) -> kafka_handler.KafkaHandler | mqtt_handler.MqttHandler | None:
         logger.debug("Factory")
         logger.debug(controller_type)
 
-        controller: Optional[Union[kafka_handler.KafkaHandler, mqtt_handler.MqttHandler]] = None
+        controller: kafka_handler.KafkaHandler | mqtt_handler.MqttHandler | None = None
         if controller_type == SUBSCRIPTION_TYPE["kafka"]:
             controller = kafka_handler.KafkaHandler()
             controller.init_consumer(

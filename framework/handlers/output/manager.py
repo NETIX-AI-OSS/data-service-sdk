@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping
+from typing import Any
 
 from framework.handlers.output.factory import Factory
 from framework.types import OutputProducer
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OutputManager:
-    output_controller_list: List[OutputProducer] = field(default_factory=list)
+    output_controller_list: list[OutputProducer] = field(default_factory=list)
 
     def get_controller(self, config: Mapping[str, Any]) -> OutputProducer:
         controller = Factory.get_output_controller(config["type"], dict(config))
@@ -21,7 +22,7 @@ class OutputManager:
         self.output_controller_list.append(controller)
         return controller
 
-    def init_manager(self, output_handlers_config: List[Dict[str, Any]]) -> None:
+    def init_manager(self, output_handlers_config: list[dict[str, Any]]) -> None:
         for output_controller in output_handlers_config:
             logger.debug(output_controller)
             _ = self.get_controller(output_controller["config"])
@@ -38,7 +39,7 @@ class OutputManager:
         for output_controller in self.output_controller_list:
             output_controller.produce(msg)
 
-    def batch_produce(self, msgs: List[Any]) -> None:
+    def batch_produce(self, msgs: list[Any]) -> None:
         for output_controller in self.output_controller_list:
             for msg in msgs:
                 output_controller.produce(msg)

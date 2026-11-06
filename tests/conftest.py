@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 # pylint: disable=import-outside-toplevel,unused-import,broad-exception-caught
-
 import sys
 import types
 from typing import Any
@@ -212,7 +211,7 @@ def _ensure_redis() -> None:
 
         class DummyRedis:
             @classmethod
-            def from_url(cls, _url: str) -> "DummyRedis":
+            def from_url(cls, _url: str) -> DummyRedis:
                 return cls()
 
         class DummyRedisCluster(DummyRedis):

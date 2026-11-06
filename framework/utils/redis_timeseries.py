@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional, Type, TypeVar, Union
+from typing import TypeVar
 
 from redis.client import Redis
 from redis.cluster import RedisCluster
@@ -22,8 +22,8 @@ _SOCKET_TIMEOUT_SECS = float(os.environ.get("REDIS_SOCKET_TIMEOUT_SECS", "5"))
 
 @dataclass
 class RedisTimeseries:
-    cls_instance: Optional["RedisTimeseries"] = None
-    redis_instance: Optional[Union[Redis, RedisCluster]] = None
+    cls_instance: RedisTimeseries | None = None
+    redis_instance: Redis | RedisCluster | None = None
 
     def __init__(self) -> None:
         logger.info("redis producer init")
@@ -47,7 +47,7 @@ class RedisTimeseries:
             )
 
     @classmethod
-    def get_redis_instance(cls: Type[T]) -> Union[Redis, RedisCluster]:
+    def get_redis_instance(cls) -> Redis | RedisCluster:
         logger.info("Getting redis instance")
         if cls.cls_instance is None:
             cls.cls_instance = RedisTimeseries()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-from framework.handlers.utils.db_handler import TableHandler, DataHandler
+from framework.handlers.utils.db_handler import DataHandler, TableHandler
 from framework.types import TsdbOutputConfig
 
 logger = logging.getLogger(__name__)

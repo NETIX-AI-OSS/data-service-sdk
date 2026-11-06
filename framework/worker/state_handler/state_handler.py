@@ -4,8 +4,8 @@ import logging
 import time
 from typing import Any
 
-from framework.utils.timeseries_manager import TimeseriesManger
 from framework.utils.timeseries import Timeseries
+from framework.utils.timeseries_manager import TimeseriesManger
 
 logger = logging.getLogger(__name__)
 

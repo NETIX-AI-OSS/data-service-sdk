@@ -5,14 +5,15 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
-
-from typing import Any, Generator, Optional
+from collections.abc import Generator
+from datetime import UTC, datetime
+from typing import Any
 
 from kafka import KafkaConsumer, KafkaProducer, TopicPartition
+
 from framework.types import (
-    KafkaConsumeError,
     KafkaConsumedMessage,
+    KafkaConsumeError,
     KafkaHeaderMetadata,
     KafkaPacketMetadata,
     KafkaPayloadFormat,
@@ -26,11 +27,11 @@ MAX_POLL_INTERVAL_MS = int(os.environ.get("KAFKA_MAX_POLL_INTERVAL_MS", "600000"
 
 
 class KafkaHandler:
-    __topic_name: Optional[str] = None
-    __producer: Optional[KafkaProducer] = None
-    __consumer: Optional[KafkaConsumer] = None
-    __polling_interval_secs: Optional[float] = None
-    __subscription_topic: Optional[str] = None
+    __topic_name: str | None = None
+    __producer: KafkaProducer | None = None
+    __consumer: KafkaConsumer | None = None
+    __polling_interval_secs: float | None = None
+    __subscription_topic: str | None = None
 
     @staticmethod
     def _normalize_payload(payload: Any) -> bytes:
@@ -108,7 +109,7 @@ class KafkaHandler:
     def _extract_kafka_metadata(
         msg_obj: Any, payload: bytes, subscription_topic: str, key_text: str | None, key_bytes_b64: str | None
     ) -> KafkaPacketMetadata:
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(UTC)
         return {
             "topic": str(msg_obj.topic or ""),
             "subscription_topic": subscription_topic,
@@ -160,7 +161,7 @@ class KafkaHandler:
 
     def assign_and_seek(
         self, start: int, end: int, topic: str, kafka_bootstrap_servers: str
-    ) -> Generator[KafkaConsumedMessage, None, None]:
+    ) -> Generator[KafkaConsumedMessage]:
         self.__subscription_topic = topic
         self.__consumer = KafkaConsumer(
             bootstrap_servers=kafka_bootstrap_servers.split(","),
@@ -184,7 +185,7 @@ class KafkaHandler:
                 )
             yield consumed_message
 
-    def consume(self) -> Generator[KafkaConsumedMessage, None, None]:
+    def consume(self) -> Generator[KafkaConsumedMessage]:
         if self.__consumer is None or self.__polling_interval_secs is None:
             raise RuntimeError("Kafka consumer not initialized")
         while True:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Tuple, cast
+from typing import Any, cast
 
 import pytest
 import urllib3
@@ -14,8 +14,8 @@ CONFIGMAPS = "/api/v1/namespaces/workers/configmaps"
 DEPLOYMENTS = "/apis/apps/v1/namespaces/workers/deployments"
 
 
-def _stub_http(monkeypatch: pytest.MonkeyPatch, status: int = 200) -> List[Tuple[str, str, Any]]:
-    sent: List[Tuple[str, str, Any]] = []
+def _stub_http(monkeypatch: pytest.MonkeyPatch, status: int = 200) -> list[tuple[str, str, Any]]:
+    sent: list[tuple[str, str, Any]] = []
 
     def fake_request(_pool: Any, method: str, url: str, *_args: Any, **kwargs: Any) -> urllib3.HTTPResponse:
         body = json.loads(kwargs["body"]) if kwargs.get("body") else None
@@ -37,7 +37,7 @@ def _worker() -> Any:
         input_id_internal = "input"
 
     class Outputs:
-        def all(self) -> List[Any]:
+        def all(self) -> list[Any]:
             return []
 
     class WorkerType:
@@ -49,8 +49,8 @@ def _worker() -> Any:
         id = 7
         input_type = InputType()
         output_destinations = Outputs()
-        config: Dict[str, Any] = {"output": False}
-        full_config: Dict[str, Any] = {}
+        config: dict[str, Any] = {"output": False}  # noqa: RUF012
+        full_config: dict[str, Any] = {}  # noqa: RUF012
         image = ""
         command = ""
         namespace = ""

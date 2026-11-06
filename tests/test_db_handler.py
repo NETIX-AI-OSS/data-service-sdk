@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import pytest
 from sqlalchemy.exc import IntegrityError, NotSupportedError
@@ -21,7 +21,7 @@ class DummyTable:
 
 
 class RecordingSession:
-    def __init__(self, behaviors: Optional[list[Exception]] = None) -> None:
+    def __init__(self, behaviors: list[Exception] | None = None) -> None:
         self.behaviors = behaviors or []
         self.executed: list[tuple[Any, Any]] = []
         self.commit_calls = 0

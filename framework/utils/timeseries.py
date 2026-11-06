@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional, Protocol, cast
+from typing import Any, Protocol, cast
 
 from redis import ResponseError
 
@@ -39,7 +39,7 @@ class RedisTimeseriesClient(Protocol):
     def create(self, key: str, retention_msecs: int, labels: dict[str, str], duplicate_policy: str) -> Any:
         """Create a series with the requested retention and labels."""
 
-    def add(self, key: str, timestamp: int, value: Any, retention_msecs: Optional[int] = None) -> Any:
+    def add(self, key: str, timestamp: int, value: Any, retention_msecs: int | None = None) -> Any:
         """Append a timestamped value to a series."""
 
     def get(self, key: str | int) -> Any:
@@ -50,9 +50,9 @@ class RedisTimeseriesClient(Protocol):
         key: str | int,
         from_time: str,
         to_time: str | int,
-        count: Optional[int] = None,
-        aggregation_type: Optional[str] = None,
-        bucket_size_msec: Optional[int] = None,
+        count: int | None = None,
+        aggregation_type: str | None = None,
+        bucket_size_msec: int | None = None,
     ) -> Any:
         """Read values in reverse time order with optional aggregation."""
 
@@ -69,13 +69,11 @@ class RedisTimeseriesWrapper(Protocol):
 @dataclass
 class Timeseries:
     # info: TimeseriesInfo
-    redis_timeseries_producer: RedisTimeseriesWrapper = cast(
+    redis_timeseries_producer: RedisTimeseriesWrapper = cast(  # noqa: RUF009
         RedisTimeseriesWrapper, RedisTimeseries.get_redis_instance()
     )
 
-    def __init__(
-        self, ts_id: str, meta: Optional[dict[str, Any]] = None, retention_msecs: Optional[int] = None
-    ) -> None:
+    def __init__(self, ts_id: str, meta: dict[str, Any] | None = None, retention_msecs: int | None = None) -> None:
         if retention_msecs is None:
             retention_msecs = DEFAULT_RETENTION_MSECS
         _ = meta
@@ -91,7 +89,7 @@ class Timeseries:
         except ResponseError as exc:
             logger.warning(str(exc))
 
-    def add(self, raw_value: Any, timestamp: Optional[int] = None) -> None:
+    def add(self, raw_value: Any, timestamp: int | None = None) -> None:
         if timestamp is None:
             timestamp = int(datetime.now().timestamp() * 1000)
         try:
@@ -108,15 +106,15 @@ class Timeseries:
     def get(self) -> Any:
         return self.redis_timeseries_producer.ts().get(self.id)
 
-    def get_last_n(self, count: int) -> List[Any]:
+    def get_last_n(self, count: int) -> list[Any]:
         return_list = cast(
-            List[Any], self.redis_timeseries_producer.ts().revrange(self.id, from_time="-", to_time="+", count=count)
+            list[Any], self.redis_timeseries_producer.ts().revrange(self.id, from_time="-", to_time="+", count=count)
         )
         return return_list
 
-    def get_n_before_timestamp(self, count: int, to_timestamp: str | int) -> List[Any]:
+    def get_n_before_timestamp(self, count: int, to_timestamp: str | int) -> list[Any]:
         return_list = cast(
-            List[Any],
+            list[Any],
             self.redis_timeseries_producer.ts().revrange(self.id, from_time="-", to_time=to_timestamp, count=count),
         )
         return return_list
@@ -132,9 +130,9 @@ class Timeseries:
 
     def aggregate_last_n(
         self, aggregation_method: AggregationMethod, bucket_size_secs: int = TS_AGGREGATION_INTERVAL_SECS
-    ) -> List[Any]:
+    ) -> list[Any]:
         return_list = cast(
-            List[Any],
+            list[Any],
             self.redis_timeseries_producer.ts().revrange(
                 self.id,
                 from_time="-",
@@ -149,8 +147,8 @@ class Timeseries:
 class TimeseriesQuery:
     redis_timeseries: RedisTimeseriesWrapper = cast(RedisTimeseriesWrapper, RedisTimeseries.get_redis_instance())
 
-    def query_last(self, ts_id: int, count: int = 1) -> List[Any]:
-        return cast(List[Any], self.redis_timeseries.ts().revrange(ts_id, from_time="-", to_time="+", count=count))
+    def query_last(self, ts_id: int, count: int = 1) -> list[Any]:
+        return cast(list[Any], self.redis_timeseries.ts().revrange(ts_id, from_time="-", to_time="+", count=count))
 
     def query(self, ts_id: int) -> Any:
         return self.redis_timeseries.ts().get(ts_id)

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from framework.handlers.utils.kafka_handler import KafkaHandler
 from framework.types import KafkaOutputConfig

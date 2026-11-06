@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
-from framework.handlers.output import kafka_controller, tsdb_controller, api_controller
+from framework.handlers.output import api_controller, kafka_controller, tsdb_controller
 from framework.handlers.output.type import OUTPUT_CONTROLLER_TYPE
 from framework.handlers.utils.mqtt_handler import MqttHandler
 from framework.types import ApiOutputConfig, KafkaOutputConfig, MqttConfig, OutputProducer, TsdbOutputConfig
@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 
 class Factory:
     @staticmethod
-    def get_output_controller(controller_type: str, config: Dict[str, Any]) -> Optional[OutputProducer]:
+    def get_output_controller(controller_type: str, config: dict[str, Any]) -> OutputProducer | None:
         logger.debug("Factory")
         logger.debug(controller_type)
 
-        controller: Optional[OutputProducer] = None
+        controller: OutputProducer | None = None
         if controller_type == OUTPUT_CONTROLLER_TYPE["kafka"]:
             controller = kafka_controller.KafkaOutputController(config=cast(KafkaOutputConfig, config))
             logger.debug("KafkaOutput Controller created")

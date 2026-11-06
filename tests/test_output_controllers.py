@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 # pylint: disable=no-member
-
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 import pytest
 
@@ -11,7 +10,7 @@ from framework.handlers.output import api_controller, kafka_controller, tsdb_con
 
 class DummyKafkaHandler:
     def __init__(self) -> None:
-        self.produced: List[Any] = []
+        self.produced: list[Any] = []
         self.flushed = False
         self.topic_name: str | None = None
         self.bootstrap_servers: str | None = None
@@ -53,7 +52,7 @@ def test_kafka_output_controller_handles_error(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_api_output_controller_posts(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: List[Dict[str, Any]] = []
+    calls: list[dict[str, Any]] = []
 
     def fake_post(url: str, json: Any, timeout: float) -> str:
         calls.append({"url": url, "json": json, "timeout": timeout})
@@ -85,7 +84,7 @@ def test_api_output_controller_handles_error(monkeypatch: pytest.MonkeyPatch) ->
 def test_tsdb_output_controller_retries_on_error(monkeypatch: pytest.MonkeyPatch) -> None:
     class DummyTableHandler:
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
-            self.tables: List[Any] = []
+            self.tables: list[Any] = []
 
         def make_table_if_not_exists(self, table_name: str, _schema: Any) -> None:
             self.tables.append(table_name)
@@ -95,7 +94,7 @@ def test_tsdb_output_controller_retries_on_error(monkeypatch: pytest.MonkeyPatch
 
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
             DummyDataHandler.created += 1
-            self.inserted: List[Any] = []
+            self.inserted: list[Any] = []
 
         def set_table(self, _table_name: str) -> None:
             return None
@@ -133,7 +132,7 @@ def test_tsdb_output_controller_batch_success(monkeypatch: pytest.MonkeyPatch) -
 
     class DummyDataHandler:
         def __init__(self, *_args: Any, **_kwargs: Any) -> None:
-            self.inserted: List[Any] = []
+            self.inserted: list[Any] = []
 
         def set_table(self, _table_name: str) -> None:
             return None

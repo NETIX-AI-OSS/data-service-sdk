@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import pytest
 
@@ -8,9 +8,7 @@ from framework.utils import timeseries_manager
 
 
 class DummyTimeseries:
-    def __init__(
-        self, ts_id: str, meta: Optional[dict[str, Any]] = None, retention_msecs: Optional[int] = None
-    ) -> None:
+    def __init__(self, ts_id: str, meta: dict[str, Any] | None = None, retention_msecs: int | None = None) -> None:
         self.id = ts_id
         self.meta = meta
         # int (not Optional): stays attribute-compatible with real Timeseries default

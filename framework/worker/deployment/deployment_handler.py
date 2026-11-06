@@ -4,14 +4,16 @@ import copy
 import dataclasses
 import json
 import logging
-from typing import Any, Callable, Dict, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
+
+from k8s_utils.configmap import ConfigMap
 
 # from kubernetes import client
 from k8s_utils.deployment import Deployment
-from k8s_utils.configmap import ConfigMap
 
 try:
-    from app.settings import KUBERNETES_SA_ENABLED, KUBERNETES_CONFIG
+    from app.settings import KUBERNETES_CONFIG, KUBERNETES_SA_ENABLED
 except ImportError:  # pragma: no cover
     KUBERNETES_SA_ENABLED = False
     KUBERNETES_CONFIG = ""
@@ -24,10 +26,10 @@ class WorkerHandler:
     DELETE_MAX_ATTEMPTS = 3
 
     class OutputDestination(Protocol):
-        config: Dict[str, Any]
+        config: dict[str, Any]
 
     class OutputDestinationManager(Protocol):
-        def all(self) -> list["WorkerHandler.OutputDestination"]:
+        def all(self) -> list[WorkerHandler.OutputDestination]:
             """Return all configured output destinations."""
 
     class InputType(Protocol):
@@ -40,14 +42,14 @@ class WorkerHandler:
 
     class Worker(Protocol):
         id: Any
-        input_type: "WorkerHandler.InputType"
-        output_destinations: "WorkerHandler.OutputDestinationManager"
-        config: Dict[str, Any]
-        full_config: Dict[str, Any]
+        input_type: WorkerHandler.InputType
+        output_destinations: WorkerHandler.OutputDestinationManager
+        config: dict[str, Any]
+        full_config: dict[str, Any]
         image: str
         command: str
         namespace: str
-        type: "WorkerHandler.WorkerType"
+        type: WorkerHandler.WorkerType
 
     @dataclasses.dataclass
     class DeployOptions:
@@ -58,7 +60,7 @@ class WorkerHandler:
         organization_id: int = 0
 
     @staticmethod
-    def build_full_config(worker: "WorkerHandler.Worker") -> Dict[str, Any]:
+    def build_full_config(worker: WorkerHandler.Worker) -> dict[str, Any]:
         input_controller_type = worker.input_type.input_id_internal
         output_handlers_config = []
         for output_config in worker.output_destinations.all():
@@ -71,19 +73,19 @@ class WorkerHandler:
         return full_config
 
     @staticmethod
-    def get_config_map_name(worker: "WorkerHandler.Worker", worker_base_name: str = "worker") -> str:
-        config_map_name = f"{worker_base_name}-{str(worker.id)}-config"
+    def get_config_map_name(worker: WorkerHandler.Worker, worker_base_name: str = "worker") -> str:
+        config_map_name = f"{worker_base_name}-{worker.id!s}-config"
         return config_map_name
 
     @staticmethod
-    def get_worker_name(worker: "WorkerHandler.Worker", worker_base_name: str = "worker") -> str:
-        worker_name = f"{worker_base_name}-{str(worker.id)}"
+    def get_worker_name(worker: WorkerHandler.Worker, worker_base_name: str = "worker") -> str:
+        worker_name = f"{worker_base_name}-{worker.id!s}"
         return worker_name
 
     @staticmethod
     def deploy(
-        worker: "WorkerHandler.Worker",
-        options: "WorkerHandler.DeployOptions | None" = None,
+        worker: WorkerHandler.Worker,
+        options: WorkerHandler.DeployOptions | None = None,
     ) -> None:
         opts = options or WorkerHandler.DeployOptions()
         if not worker.image:
@@ -134,7 +136,7 @@ class WorkerHandler:
             )
 
     @staticmethod
-    def deploy_config(worker: "WorkerHandler.Worker", worker_base_name: str = "worker", update: bool = False) -> str:
+    def deploy_config(worker: WorkerHandler.Worker, worker_base_name: str = "worker", update: bool = False) -> str:
         if not worker.full_config:
             worker.full_config = WorkerHandler.build_full_config(worker)
 
@@ -181,7 +183,7 @@ class WorkerHandler:
                 )
 
     @staticmethod
-    def delete_config(worker: "WorkerHandler.Worker", worker_base_name: str = "worker") -> None:
+    def delete_config(worker: WorkerHandler.Worker, worker_base_name: str = "worker") -> None:
         config_map_name = WorkerHandler.get_config_map_name(worker, worker_base_name)
         config = ConfigMap(
             name=config_map_name,
@@ -192,16 +194,16 @@ class WorkerHandler:
         WorkerHandler._delete_resource(config.delete, config_map_name)
 
     @staticmethod
-    def update(worker: "WorkerHandler.Worker") -> None:
+    def update(worker: WorkerHandler.Worker) -> None:
         WorkerHandler.delete(worker)
         WorkerHandler.deploy(worker, WorkerHandler.DeployOptions(env_from="data-configmap"))
 
     @staticmethod
-    def check(worker: "WorkerHandler.Worker") -> None:
+    def check(worker: WorkerHandler.Worker) -> None:
         _ = worker
 
     @staticmethod
-    def delete(worker: "WorkerHandler.Worker", worker_base_name: str = "worker") -> None:
+    def delete(worker: WorkerHandler.Worker, worker_base_name: str = "worker") -> None:
         worker_name = WorkerHandler.get_worker_name(worker, worker_base_name)
         deploy = Deployment(
             app_name=worker_name,

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterator
 from types import SimpleNamespace
-from typing import Any, Iterator, List, cast
+from typing import Any, cast
 
 import pytest
 
@@ -27,10 +28,10 @@ def make_dummy_message(offset: int, value: Any = None, **overrides: Any) -> Any:
 
 
 class DummyConsumer:
-    def __init__(self, messages: List[Any]) -> None:
+    def __init__(self, messages: list[Any]) -> None:
         self._messages = messages
-        self.assigned: List[Any] = []
-        self.seek_calls: List[Any] = []
+        self.assigned: list[Any] = []
+        self.seek_calls: list[Any] = []
 
     def assign(self, partitions: list[Any]) -> None:
         self.assigned = partitions
@@ -44,7 +45,7 @@ class DummyConsumer:
 
 class DummyProducer:
     def __init__(self) -> None:
-        self.sent: List[Any] = []
+        self.sent: list[Any] = []
         self.flushed = False
 
     def send(self, topic: str, key: bytes, value: Any) -> str:
@@ -206,7 +207,7 @@ def test_kafka_handler_consume_reuses_single_consumer_instance(monkeypatch: pyte
             make_dummy_message(2, value=b'{"offset": 2}', topic="loop-topic"),
         ]
     )
-    calls: List[tuple[Any, Any]] = []
+    calls: list[tuple[Any, Any]] = []
 
     def fake_consumer(*args: Any, **kwargs: Any) -> DummyConsumer:
         calls.append((args, kwargs))
@@ -247,7 +248,7 @@ def test_kafka_handler_flush_requires_init() -> None:
 
 
 def test_kafka_handler_normalize_payload_variants() -> None:
-    normalize_payload = getattr(kafka_handler.KafkaHandler, "_normalize_payload")
+    normalize_payload = kafka_handler.KafkaHandler._normalize_payload
     assert normalize_payload(bytearray(b"abc")) == b"abc"
     assert normalize_payload(None) == b""
     assert normalize_payload("txt") == b"txt"
@@ -262,7 +263,7 @@ def test_kafka_handler_extract_key_and_headers_non_list_headers() -> None:
     )
     message.headers = cast(Any, ("not", "a", "list"))
 
-    extract_key_and_headers = getattr(kafka_handler.KafkaHandler, "_extract_key_and_headers")
+    extract_key_and_headers = kafka_handler.KafkaHandler._extract_key_and_headers
     key_text, key_b64, headers = extract_key_and_headers(message)
     assert key_text == "k"
     assert key_b64 == base64.b64encode(b"k").decode("ascii")
@@ -274,7 +275,7 @@ def test_kafka_handler_extract_key_and_headers_skips_invalid_and_handles_none() 
     message.key = cast(Any, "s-key")
     message.headers = cast(Any, [("h1", None), ("bad",), "bad"])
 
-    extract_key_and_headers = getattr(kafka_handler.KafkaHandler, "_extract_key_and_headers")
+    extract_key_and_headers = kafka_handler.KafkaHandler._extract_key_and_headers
     key_text, key_b64, headers = extract_key_and_headers(message)
     assert key_text == "s-key"
     assert key_b64 == base64.b64encode(b"s-key").decode("ascii")
@@ -285,7 +286,7 @@ def test_kafka_handler_extract_key_and_headers_skips_invalid_and_handles_none() 
 
 
 def test_kafka_handler_parse_payload_unicode_decode_error() -> None:
-    parse_payload = getattr(kafka_handler.KafkaHandler, "_parse_payload")
+    parse_payload = kafka_handler.KafkaHandler._parse_payload
     payload, error, payload_format = parse_payload(b"\x80")
     assert payload == b"\x80"
     assert error is not None
