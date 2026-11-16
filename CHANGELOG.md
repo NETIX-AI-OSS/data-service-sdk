@@ -16,7 +16,7 @@ This project uses two-component release tags (`v1.5`) and three-component packag
   session. A connection that dropped between CONNACK and SUBACK used to leave the worker connected
   to a session with no subscriptions, receiving nothing until its pod was restarted.
 
-## 1.7.0 — 2026-10-14 (tag `v1.7`)
+## 1.7.0: 2026-10-14 (tag `v1.7`)
 
 ### Fixed
 
@@ -31,7 +31,7 @@ This project uses two-component release tags (`v1.5`) and three-component packag
   with only the HTTP pool stubbed.
 - The dev lock moves to kubernetes 37.0.1.
 
-## 1.6.0 — 2026-09-27 (tag `v1.6`)
+## 1.6.0: 2026-09-27 (tag `v1.6`)
 
 ### Added
 
@@ -46,13 +46,13 @@ This project uses two-component release tags (`v1.5`) and three-component packag
 - Cleaned up docs, license headers and docstrings.
 - CI: migrated `ubuntu-latest` jobs to the `build-only` runner.
 
-## 1.5.0 — 2026-08-15 (tag `v1.5`)
+## 1.5.0: 2026-08-15 (tag `v1.5`)
 
 ### Fixed
 
 - Redis cluster clients no longer strand on stale node addresses after a topology change.
 
-## 1.4.0 — 2026-07-16 (tag `v1.4`)
+## 1.4.0: 2026-07-16 (tag `v1.4`)
 
 ### Added
 
@@ -70,7 +70,7 @@ This project uses two-component release tags (`v1.5`) and three-component packag
 - Added a mypy pre-commit hook.
 - Added explicit workflow permissions to CI (security hardening).
 
-## 1.3.0 — 2026-06-12 (tag `v1.3`)
+## 1.3.0: 2026-06-12 (tag `v1.3`)
 
 ### Fixed
 
@@ -82,19 +82,19 @@ This project uses two-component release tags (`v1.5`) and three-component packag
 - Dropped black; formatting is ruff-only.
 - Removed redundant int casts flagged by CI mypy.
 
-## 1.2.0 — 2026-03-23 (tag `v1.2`)
+## 1.2.0: 2026-03-23 (tag `v1.2`)
 
 ### Changed
 
 - The MQTT handler reuses client instances and manages connections more carefully.
 - Coverage configuration omits test files from coverage reports.
 
-## 1.1.0 — 2026-03-23 (tag `v1.1`)
+## 1.1.0: 2026-03-23 (tag `v1.1`)
 
 ### Changed
 
 - MQTT message retention is set to true in the consumer.
 
-## 1.0.0 — 2026-03-16 (tag `v1.0`)
+## 1.0.0: 2026-03-16 (tag `v1.0`)
 
 - Initial open-source release.
