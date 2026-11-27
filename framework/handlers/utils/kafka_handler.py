@@ -33,9 +33,14 @@ class KafkaHandler:
     __polling_interval_secs: float | None = None
     __subscription_topic: str | None = None
 
-    @staticmethod
-    def _client_security_options() -> dict[str, Any]:
-        """Use the authenticated listener when configured, keeping existing clients unchanged."""
+    def __init__(self, *, use_env_security: bool = False) -> None:
+        # Tenant-selected Kafka subscribers use the default plaintext client. Only
+        # explicitly trusted internal broker connections may read platform SASL credentials.
+        self._use_env_security = use_env_security
+
+    def _client_security_options(self) -> dict[str, Any]:
+        if not self._use_env_security:
+            return {}
         protocol = os.environ.get("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip().upper()
         if protocol == "PLAINTEXT":
             if os.environ.get("KAFKA_SASL_USERNAME") or os.environ.get("KAFKA_SASL_PASSWORD"):
@@ -254,3 +259,10 @@ class KafkaHandler:
         if self.__producer is None:
             raise RuntimeError("Kafka producer not initialized")
         self.__producer.flush()
+
+
+class PlatformKafkaHandler(KafkaHandler):
+    """Kafka client for trusted, internal platform brokers with Secret-backed auth."""
+
+    def __init__(self) -> None:
+        super().__init__(use_env_security=True)

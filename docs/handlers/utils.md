@@ -80,13 +80,16 @@ Kafka consume envelope (typed by `KafkaConsumedMessage`):
 }
 ```
 
-Kafka clients use the existing PLAINTEXT behavior until `KAFKA_SECURITY_PROTOCOL`
-is set. To move a client to an authenticated TLS listener, set
+Kafka clients use PLAINTEXT by default, including tenant-selected subscription
+brokers. For an internal platform broker connection, construct
+`PlatformKafkaHandler()` (or `KafkaHandler(use_env_security=True)`) and set
 `KAFKA_SECURITY_PROTOCOL=SASL_SSL`, `KAFKA_SASL_MECHANISM` (defaults to `PLAIN`),
 `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, and `KAFKA_SSL_CAFILE` (path to a
 trusted CA bundle). Inject the username and password from a Secret. The TLS
 certificate must cover every advertised broker hostname; hostname validation
-stays enabled. The settings apply to consumers, producers, and offset reads.
+stays enabled. Only explicitly opted-in handlers use these settings, for
+consumers, producers, and offset reads. Never opt a tenant-selected Kafka
+subscriber into platform credentials.
 Missing credentials or CA configuration raise an error before a Kafka client
 connects. `SASL_PLAINTEXT` is not accepted.
 
