@@ -219,8 +219,6 @@ def test_mqtt_handler_consume_json_object(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_mqtt_handler_consumer_uses_verified_tls_and_custom_ca(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MQTT_TLS", "true")
-    monkeypatch.setenv("MQTT_CA_FILE", "/etc/mqtt/tls/ca.crt")
     client = install_dummy_client(monkeypatch, [("connect", False), ("message", make_dummy_message(b"42"))])
     constructed: list[dict[str, Any]] = []
 
@@ -230,7 +228,10 @@ def test_mqtt_handler_consumer_uses_verified_tls_and_custom_ca(monkeypatch: pyte
 
     monkeypatch.setattr(mqtt_handler, "create_mqtt_client", create_client)
     handler = mqtt_handler.MqttHandler()
-    handler.init_consumer("topic", "emqx-listeners.platform.svc.cluster.local", "user", "password")
+    handler.init_consumer(
+        "topic", "emqx-listeners.platform.svc.cluster.local", "user", "password",
+        port=8883, tls=True, ca_file="/etc/mqtt/tls/ca.crt"
+    )
 
     assert next(handler.consume())["data"] == 42
     assert constructed[0]["tls"] is True
@@ -238,29 +239,15 @@ def test_mqtt_handler_consumer_uses_verified_tls_and_custom_ca(monkeypatch: pyte
     assert client.call_history["connect_calls"] == [("emqx-listeners.platform.svc.cluster.local", 8883, 25)]
 
 
-def test_mqtt_handler_rejects_ca_without_tls(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("MQTT_TLS", "false")
-    monkeypatch.setenv("MQTT_CA_FILE", "/etc/mqtt/tls/ca.crt")
-
-    with pytest.raises(ValueError, match="MQTT_CA_FILE requires MQTT_TLS"):
-        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password")
+def test_mqtt_handler_rejects_ca_without_tls() -> None:
+    with pytest.raises(ValueError, match="CA file requires TLS"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", ca_file="/ca.crt")
 
 
-@pytest.mark.parametrize(
-    ("setting", "value", "error"),
-    [
-        ("MQTT_TLS", "perhaps", "MQTT_TLS must be true or false"),
-        ("MQTT_PORT", "not-a-port", "MQTT_PORT must be an integer"),
-        ("MQTT_PORT", "65536", "MQTT_PORT must be an integer"),
-    ],
-)
-def test_mqtt_handler_rejects_invalid_transport_settings(
-    monkeypatch: pytest.MonkeyPatch, setting: str, value: str, error: str
-) -> None:
-    monkeypatch.setenv(setting, value)
-
-    with pytest.raises(ValueError, match=error):
-        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password")
+@pytest.mark.parametrize("port", [0, 65536, "not-a-port", True])
+def test_mqtt_handler_rejects_invalid_port(port: Any) -> None:
+    with pytest.raises(ValueError, match="port must be an integer"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", port=port)
 
 
 def test_mqtt_handler_consume_json_primitive(monkeypatch: pytest.MonkeyPatch) -> None:

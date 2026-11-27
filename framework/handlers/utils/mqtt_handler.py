@@ -55,22 +55,22 @@ class MqttHandler:
     __auth: dict[str, str] | None = None
     __consumer_state: _MqttConsumerState | None = None
 
-    def init_consumer(self, topic: str, host: str, user: str, password: str) -> None:
-        """Configure a consumer; MQTT_TLS enables verified server TLS for this process."""
-        tls_setting = os.environ.get("MQTT_TLS", "false").strip().lower()
-        if tls_setting not in {"true", "false", "1", "0"}:
-            raise ValueError("MQTT_TLS must be true or false")
-        tls = tls_setting in {"true", "1"}
-        raw_port = os.environ.get("MQTT_PORT", "8883" if tls else "1883")
-        try:
-            port = int(raw_port)
-        except ValueError as error:
-            raise ValueError("MQTT_PORT must be an integer from 1 to 65535") from error
-        if not 1 <= port <= 65535:
-            raise ValueError("MQTT_PORT must be an integer from 1 to 65535")
-        ca_file = os.environ.get("MQTT_CA_FILE") or None
+    def init_consumer(  # pylint: disable=too-many-arguments
+        self,
+        topic: str,
+        host: str,
+        user: str,
+        password: str,
+        *,
+        port: int = 1883,
+        tls: bool = False,
+        ca_file: str | None = None,
+    ) -> None:
+        """Configure transport for this consumer; verified TLS is opt-in per connection."""
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ValueError("MQTT consumer port must be an integer from 1 to 65535")
         if ca_file and not tls:
-            raise ValueError("MQTT_CA_FILE requires MQTT_TLS=true")
+            raise ValueError("MQTT consumer CA file requires TLS")
 
         self.close_consumer()
         self.__auth = {"username": user, "password": password}
