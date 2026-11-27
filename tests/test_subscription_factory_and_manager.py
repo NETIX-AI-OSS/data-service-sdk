@@ -8,6 +8,7 @@ import pytest
 from framework.handlers.subscription import factory as subscription_factory
 from framework.handlers.subscription.manager import SubscriptionManager
 from framework.handlers.subscription.type import SUBSCRIPTION_TYPE
+from framework.handlers.utils import kafka_handler
 
 
 class DummyKafkaHandler:
@@ -58,6 +59,31 @@ def test_subscription_factory_kafka(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert controller.init_args is not None
     assert controller.init_args[0] == "t"
+
+
+def test_subscription_factory_never_sends_platform_credentials_to_tenant_broker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
+    monkeypatch.setenv("KAFKA_SASL_USERNAME", "platform-user")
+    monkeypatch.setenv("KAFKA_SASL_PASSWORD", "platform-secret")
+    monkeypatch.setenv("KAFKA_SSL_CAFILE", "/tmp/platform-ca.pem")
+    captured: dict[str, Any] = {}
+
+    def fake_consumer(*_args: Any, **kwargs: Any) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(kafka_handler, "KafkaConsumer", fake_consumer)
+    subscription_factory.Factory.get_subscription_controller(
+        SUBSCRIPTION_TYPE["kafka"],
+        {"kafka_topic_subscribe": "tenant-topic", "kafka_bootstrap_servers": "kafka1.platform:9094"},
+    )
+
+    assert captured["bootstrap_servers"] == ["kafka1.platform:9094"]
+    assert "security_protocol" not in captured
+    assert "sasl_plain_username" not in captured
+    assert "sasl_plain_password" not in captured
 
 
 def test_subscription_factory_mqtt(monkeypatch: pytest.MonkeyPatch) -> None:
