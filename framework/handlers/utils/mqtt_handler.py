@@ -49,14 +49,36 @@ class _MqttConsumerState:
 class MqttHandler:
     __topic_name: str | None = None
     __host: str | None = None
+    __port: int = 1883
+    __tls: bool = False
+    __ca_file: str | None = None
     __auth: dict[str, str] | None = None
     __consumer_state: _MqttConsumerState | None = None
 
     def init_consumer(self, topic: str, host: str, user: str, password: str) -> None:
+        """Configure a consumer; MQTT_TLS enables verified server TLS for this process."""
+        tls_setting = os.environ.get("MQTT_TLS", "false").strip().lower()
+        if tls_setting not in {"true", "false", "1", "0"}:
+            raise ValueError("MQTT_TLS must be true or false")
+        tls = tls_setting in {"true", "1"}
+        raw_port = os.environ.get("MQTT_PORT", "8883" if tls else "1883")
+        try:
+            port = int(raw_port)
+        except ValueError as error:
+            raise ValueError("MQTT_PORT must be an integer from 1 to 65535") from error
+        if not 1 <= port <= 65535:
+            raise ValueError("MQTT_PORT must be an integer from 1 to 65535")
+        ca_file = os.environ.get("MQTT_CA_FILE") or None
+        if ca_file and not tls:
+            raise ValueError("MQTT_CA_FILE requires MQTT_TLS=true")
+
         self.close_consumer()
         self.__auth = {"username": user, "password": password}
         self.__topic_name = topic
         self.__host = host
+        self.__port = port
+        self.__tls = tls
+        self.__ca_file = ca_file
         self.__consumer_state = _MqttConsumerState(client_id=self._build_consumer_client_id(topic, host))
 
     def _build_consumer_client_id(self, topic: str, host: str) -> str:
@@ -182,6 +204,8 @@ class MqttHandler:
             clean_session=False,
             username=self.__auth["username"],
             password=self.__auth["password"],
+            tls=self.__tls,
+            ca_file=self.__ca_file,
         )
         client.enable_logger(logger)
         client.on_connect = self._on_connect
@@ -279,7 +303,7 @@ class MqttHandler:
             state.connected = False
             error: Exception
             try:
-                result = client.connect(self.__host, keepalive=25) if initial else client.reconnect()
+                result = client.connect(self.__host, port=self.__port, keepalive=25) if initial else client.reconnect()
                 if result == mqtt.MQTT_ERR_SUCCESS:
                     # Re-runs connect handshake; _on_connect re-subscribes on every connect
                     self._wait_for_connection(client, deadline=deadline)
