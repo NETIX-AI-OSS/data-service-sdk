@@ -244,6 +244,11 @@ def test_mqtt_handler_rejects_ca_without_tls() -> None:
         mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", ca_file="/ca.crt")
 
 
+def test_mqtt_handler_rejects_string_tls_flag() -> None:
+    with pytest.raises(TypeError, match="TLS flag must be a boolean"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", tls=cast(Any, "false"))
+
+
 @pytest.mark.parametrize("port", [0, 65536, "not-a-port", True])
 def test_mqtt_handler_rejects_invalid_port(port: Any) -> None:
     with pytest.raises(ValueError, match="port must be an integer"):

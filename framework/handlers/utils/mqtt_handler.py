@@ -69,6 +69,8 @@ class MqttHandler:
         """Configure transport for this consumer; verified TLS is opt-in per connection."""
         if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise ValueError("MQTT consumer port must be an integer from 1 to 65535")
+        if not isinstance(tls, bool):
+            raise TypeError("MQTT consumer TLS flag must be a boolean")
         if ca_file and not tls:
             raise ValueError("MQTT consumer CA file requires TLS")
 
