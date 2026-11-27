@@ -374,3 +374,85 @@ def test_kafka_handler_init_consumer_poll_bounds_are_overridable(monkeypatch: py
 
     assert captured["max_poll_records"] == 7
     assert captured["max_poll_interval_ms"] == 123_000
+
+
+def test_kafka_handler_keeps_plaintext_defaults_without_security_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in (
+        "KAFKA_SECURITY_PROTOCOL",
+        "KAFKA_SASL_MECHANISM",
+        "KAFKA_SASL_USERNAME",
+        "KAFKA_SASL_PASSWORD",
+        "KAFKA_SSL_CAFILE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    captured: dict[str, Any] = {}
+
+    def fake_producer(**kwargs: Any) -> DummyProducer:
+        captured.update(kwargs)
+        return DummyProducer()
+
+    monkeypatch.setattr(kafka_handler, "KafkaProducer", fake_producer)
+    kafka_handler.KafkaHandler().init_producer("topic", "broker:9092")
+
+    assert "security_protocol" not in captured
+    assert "sasl_plain_password" not in captured
+
+
+def test_kafka_handler_uses_sasl_ssl_for_all_kafka_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
+    monkeypatch.setenv("KAFKA_SASL_MECHANISM", "PLAIN")
+    monkeypatch.setenv("KAFKA_SASL_USERNAME", "test-user")
+    monkeypatch.setenv("KAFKA_SASL_PASSWORD", "test-secret")
+    monkeypatch.setenv("KAFKA_SSL_CAFILE", "/tmp/test-ca.pem")
+    calls: list[dict[str, Any]] = []
+
+    def fake_consumer(*_args: Any, **kwargs: Any) -> DummyConsumer:
+        calls.append(kwargs)
+        return DummyConsumer([])
+
+    def fake_producer(**kwargs: Any) -> DummyProducer:
+        calls.append(kwargs)
+        return DummyProducer()
+
+    monkeypatch.setattr(kafka_handler, "KafkaConsumer", fake_consumer)
+    monkeypatch.setattr(kafka_handler, "KafkaProducer", fake_producer)
+    handler = kafka_handler.KafkaHandler()
+    handler.init_consumer("topic", "broker:9094", "group", "latest", True, 1.0)
+    list(handler.assign_and_seek(0, 0, "topic", "broker:9094"))
+    handler.init_producer("topic", "broker:9094")
+
+    assert len(calls) == 3
+    for call in calls:
+        assert call["security_protocol"] == "SASL_SSL"
+        assert call["sasl_mechanism"] == "PLAIN"
+        assert call["sasl_plain_username"] == "test-user"
+        assert call["sasl_plain_password"] == "test-secret"
+        assert call["ssl_cafile"] == "/tmp/test-ca.pem"
+        assert call["ssl_check_hostname"] is True
+
+
+@pytest.mark.parametrize(
+    ("environment", "message"),
+    [
+        ({"KAFKA_SECURITY_PROTOCOL": "SASL_PLAINTEXT"}, "KAFKA_SECURITY_PROTOCOL"),
+        ({"KAFKA_SECURITY_PROTOCOL": "SASL_SSL"}, "requires KAFKA_SASL_USERNAME"),
+        ({"KAFKA_SECURITY_PROTOCOL": "SASL_SSL", "KAFKA_SASL_MECHANISM": "GSSAPI"}, "Unsupported"),
+        ({"KAFKA_SASL_USERNAME": "test-user"}, "credentials require"),
+    ],
+)
+def test_kafka_handler_rejects_insecure_or_incomplete_security_settings(
+    monkeypatch: pytest.MonkeyPatch, environment: dict[str, str], message: str
+) -> None:
+    for key in (
+        "KAFKA_SECURITY_PROTOCOL",
+        "KAFKA_SASL_MECHANISM",
+        "KAFKA_SASL_USERNAME",
+        "KAFKA_SASL_PASSWORD",
+        "KAFKA_SSL_CAFILE",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in environment.items():
+        monkeypatch.setenv(key, value)
+
+    with pytest.raises(ValueError, match=message):
+        kafka_handler.KafkaHandler().init_producer("topic", "broker:9094")

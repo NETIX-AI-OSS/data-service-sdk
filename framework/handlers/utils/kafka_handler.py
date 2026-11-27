@@ -34,6 +34,34 @@ class KafkaHandler:
     __subscription_topic: str | None = None
 
     @staticmethod
+    def _client_security_options() -> dict[str, Any]:
+        """Use the authenticated listener when configured, keeping existing clients unchanged."""
+        protocol = os.environ.get("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip().upper()
+        if protocol == "PLAINTEXT":
+            if os.environ.get("KAFKA_SASL_USERNAME") or os.environ.get("KAFKA_SASL_PASSWORD"):
+                raise ValueError("Kafka SASL credentials require KAFKA_SECURITY_PROTOCOL=SASL_SSL")
+            return {}
+        if protocol != "SASL_SSL":
+            raise ValueError("KAFKA_SECURITY_PROTOCOL must be PLAINTEXT or SASL_SSL")
+
+        mechanism = os.environ.get("KAFKA_SASL_MECHANISM", "PLAIN").strip().upper()
+        if mechanism not in {"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"}:
+            raise ValueError("Unsupported KAFKA_SASL_MECHANISM")
+        username = os.environ.get("KAFKA_SASL_USERNAME", "").strip()
+        password = os.environ.get("KAFKA_SASL_PASSWORD", "")
+        ca_file = os.environ.get("KAFKA_SSL_CAFILE", "").strip()
+        if not username or not password or not ca_file:
+            raise ValueError("SASL_SSL requires KAFKA_SASL_USERNAME, KAFKA_SASL_PASSWORD and KAFKA_SSL_CAFILE")
+        return {
+            "security_protocol": protocol,
+            "sasl_mechanism": mechanism,
+            "sasl_plain_username": username,
+            "sasl_plain_password": password,
+            "ssl_cafile": ca_file,
+            "ssl_check_hostname": True,
+        }
+
+    @staticmethod
     def _normalize_payload(payload: Any) -> bytes:
         if isinstance(payload, bytes):
             return payload
@@ -157,6 +185,7 @@ class KafkaHandler:
             enable_auto_commit=kafka_ts_auto_commit,
             max_poll_records=max_poll_records,
             max_poll_interval_ms=max_poll_interval_ms,
+            **self._client_security_options(),
         )
 
     def assign_and_seek(
@@ -165,6 +194,7 @@ class KafkaHandler:
         self.__subscription_topic = topic
         self.__consumer = KafkaConsumer(
             bootstrap_servers=kafka_bootstrap_servers.split(","),
+            **self._client_security_options(),
         )
         partition = TopicPartition(topic, 0)
         # start = self.start
@@ -212,6 +242,7 @@ class KafkaHandler:
             acks="all",
             bootstrap_servers=bootstrap_servers.split(","),
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            **self._client_security_options(),
         )
 
     def produce(self, key: str, value: Any) -> Any:
