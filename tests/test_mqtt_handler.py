@@ -229,8 +229,13 @@ def test_mqtt_handler_consumer_uses_verified_tls_and_custom_ca(monkeypatch: pyte
     monkeypatch.setattr(mqtt_handler, "create_mqtt_client", create_client)
     handler = mqtt_handler.MqttHandler()
     handler.init_consumer(
-        "topic", "emqx-listeners.platform.svc.cluster.local", "user", "password",
-        port=8883, tls=True, ca_file="/etc/mqtt/tls/ca.crt"
+        "topic",
+        "emqx-listeners.platform.svc.cluster.local",
+        "user",
+        "password",
+        port=8883,
+        tls=True,
+        ca_file="/etc/mqtt/tls/ca.crt",
     )
 
     assert next(handler.consume())["data"] == 42
