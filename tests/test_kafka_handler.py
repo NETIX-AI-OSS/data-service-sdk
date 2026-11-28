@@ -376,15 +376,12 @@ def test_kafka_handler_init_consumer_poll_bounds_are_overridable(monkeypatch: py
     assert captured["max_poll_interval_ms"] == 123_000
 
 
-def test_opted_in_kafka_handler_keeps_plaintext_without_security_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in (
-        "KAFKA_SECURITY_PROTOCOL",
-        "KAFKA_SASL_MECHANISM",
-        "KAFKA_SASL_USERNAME",
-        "KAFKA_SASL_PASSWORD",
-        "KAFKA_SSL_CAFILE",
-    ):
-        monkeypatch.delenv(key, raising=False)
+def test_kafka_subclass_without_super_keeps_plaintext(monkeypatch: pytest.MonkeyPatch) -> None:
+    class CustomKafkaHandler(kafka_handler.KafkaHandler):
+        def __init__(self) -> None:
+            self.custom = True
+
+    monkeypatch.setenv("KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
     captured: dict[str, Any] = {}
 
     def fake_producer(**kwargs: Any) -> DummyProducer:
@@ -392,8 +389,9 @@ def test_opted_in_kafka_handler_keeps_plaintext_without_security_settings(monkey
         return DummyProducer()
 
     monkeypatch.setattr(kafka_handler, "KafkaProducer", fake_producer)
-    kafka_handler.PlatformKafkaHandler().init_producer("topic", "broker:9092")
+    CustomKafkaHandler().init_producer("topic", "broker:9092")
 
+    assert captured
     assert "security_protocol" not in captured
     assert "sasl_plain_password" not in captured
 
@@ -434,10 +432,11 @@ def test_kafka_handler_uses_sasl_ssl_for_opted_in_clients(monkeypatch: pytest.Mo
 @pytest.mark.parametrize(
     ("environment", "message"),
     [
-        ({"KAFKA_SECURITY_PROTOCOL": "SASL_PLAINTEXT"}, "KAFKA_SECURITY_PROTOCOL"),
+        ({}, "require KAFKA_SECURITY_PROTOCOL=SASL_SSL"),
+        ({"KAFKA_SECURITY_PROTOCOL": "PLAINTEXT"}, "require KAFKA_SECURITY_PROTOCOL=SASL_SSL"),
+        ({"KAFKA_SECURITY_PROTOCOL": "SASL_PLAINTEXT"}, "require KAFKA_SECURITY_PROTOCOL=SASL_SSL"),
         ({"KAFKA_SECURITY_PROTOCOL": "SASL_SSL"}, "requires KAFKA_SASL_USERNAME"),
         ({"KAFKA_SECURITY_PROTOCOL": "SASL_SSL", "KAFKA_SASL_MECHANISM": "GSSAPI"}, "Unsupported"),
-        ({"KAFKA_SASL_USERNAME": "test-user"}, "credentials require"),
     ],
 )
 def test_kafka_handler_rejects_insecure_or_incomplete_security_settings(
