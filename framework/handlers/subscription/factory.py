@@ -37,6 +37,9 @@ class Factory:
                 config.get("host", ""),
                 config.get("user", ""),
                 config.get("password", ""),
+                port=config.get("mqtt_port", 1883),
+                tls=config.get("mqtt_tls", False),
+                ca_file=config.get("mqtt_ca_file"),
             )
             logger.debug("Mqtt subscription created")
 

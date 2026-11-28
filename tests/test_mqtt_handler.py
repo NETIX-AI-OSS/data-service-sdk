@@ -218,6 +218,48 @@ def test_mqtt_handler_consume_json_object(monkeypatch: pytest.MonkeyPatch) -> No
     assert client.client_id.startswith("dsdk-")
 
 
+def test_mqtt_handler_consumer_uses_verified_tls_and_custom_ca(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = install_dummy_client(monkeypatch, [("connect", False), ("message", make_dummy_message(b"42"))])
+    constructed: list[dict[str, Any]] = []
+
+    def create_client(**kwargs: Any) -> DummyClient:
+        constructed.append(kwargs)
+        return client
+
+    monkeypatch.setattr(mqtt_handler, "create_mqtt_client", create_client)
+    handler = mqtt_handler.MqttHandler()
+    handler.init_consumer(
+        "topic",
+        "emqx-listeners.platform.svc.cluster.local",
+        "user",
+        "password",
+        port=8883,
+        tls=True,
+        ca_file="/etc/mqtt/tls/ca.crt",
+    )
+
+    assert next(handler.consume())["data"] == 42
+    assert constructed[0]["tls"] is True
+    assert constructed[0]["ca_file"] == "/etc/mqtt/tls/ca.crt"
+    assert client.call_history["connect_calls"] == [("emqx-listeners.platform.svc.cluster.local", 8883, 25)]
+
+
+def test_mqtt_handler_rejects_ca_without_tls() -> None:
+    with pytest.raises(ValueError, match="CA file requires TLS"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", ca_file="/ca.crt")
+
+
+def test_mqtt_handler_rejects_string_tls_flag() -> None:
+    with pytest.raises(TypeError, match="TLS flag must be a boolean"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", tls=cast(Any, "false"))
+
+
+@pytest.mark.parametrize("port", [0, 65536, "not-a-port", True])
+def test_mqtt_handler_rejects_invalid_port(port: Any) -> None:
+    with pytest.raises(ValueError, match="port must be an integer"):
+        mqtt_handler.MqttHandler().init_consumer("topic", "host", "user", "password", port=port)
+
+
 def test_mqtt_handler_consume_json_primitive(monkeypatch: pytest.MonkeyPatch) -> None:
     install_dummy_client(
         monkeypatch,

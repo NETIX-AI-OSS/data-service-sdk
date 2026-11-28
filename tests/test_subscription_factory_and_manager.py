@@ -36,9 +36,13 @@ class DummyKafkaHandler:
 class DummyMqttHandler:
     def __init__(self) -> None:
         self.init_args: tuple[str, str, str, str] | None = None
+        self.transport: tuple[int, bool, str | None] | None = None
 
-    def init_consumer(self, topic: str, host: str, user: str, password: str) -> None:
+    def init_consumer(  # pylint: disable=too-many-arguments
+        self, topic: str, host: str, user: str, password: str, *, port: int, tls: bool, ca_file: str | None
+    ) -> None:
         self.init_args = (topic, host, user, password)
+        self.transport = (port, tls, ca_file)
 
 
 def test_subscription_factory_kafka(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,6 +73,29 @@ def test_subscription_factory_mqtt(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert controller.init_args == ("t", "h", "u", "p")
+    assert controller.transport == (1883, False, None)
+
+
+def test_subscription_factory_mqtt_keeps_tls_scoped_to_selected_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(subscription_factory, "mqtt_handler", type("M", (), {"MqttHandler": DummyMqttHandler}))
+
+    controller = cast(
+        DummyMqttHandler,
+        subscription_factory.Factory.get_subscription_controller(
+            SUBSCRIPTION_TYPE["mqtt"],
+            {
+                "topic": "t",
+                "host": "emqx-listeners.platform.svc.cluster.local",
+                "user": "u",
+                "password": "p",
+                "mqtt_port": 8883,
+                "mqtt_tls": True,
+                "mqtt_ca_file": "/etc/mqtt/tls/ca.crt",
+            },
+        ),
+    )
+
+    assert controller.transport == (8883, True, "/etc/mqtt/tls/ca.crt")
 
 
 def test_subscription_manager_sets_controller(monkeypatch: pytest.MonkeyPatch) -> None:

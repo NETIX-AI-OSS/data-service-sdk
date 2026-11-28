@@ -42,6 +42,13 @@ controller = Factory.get_subscription_controller(
 )
 ```
 
+MQTT consumers use plaintext TCP/1883 by default for compatibility. For a TLS
+connection, pass `mqtt_tls=True`, `mqtt_port=8883`, and `mqtt_ca_file` pointing
+to a mounted CA file if the broker uses a private CA. These settings belong to
+the selected connection and are not read from process-wide MQTT environment
+variables. Use a DNS name present in the server certificate's SAN. Invalid
+ports and a CA file without TLS are rejected before the consumer connects.
+
 ## Known Constraints and Edge Cases
 - Factory uses string type values (`"1"` for Kafka, `"2"` for MQTT).
 - Unknown type returns `None`; caller should validate before use.

@@ -49,14 +49,38 @@ class _MqttConsumerState:
 class MqttHandler:
     __topic_name: str | None = None
     __host: str | None = None
+    __port: int = 1883
+    __tls: bool = False
+    __ca_file: str | None = None
     __auth: dict[str, str] | None = None
     __consumer_state: _MqttConsumerState | None = None
 
-    def init_consumer(self, topic: str, host: str, user: str, password: str) -> None:
+    def init_consumer(  # pylint: disable=too-many-arguments
+        self,
+        topic: str,
+        host: str,
+        user: str,
+        password: str,
+        *,
+        port: int = 1883,
+        tls: bool = False,
+        ca_file: str | None = None,
+    ) -> None:
+        """Configure transport for this consumer; verified TLS is opt-in per connection."""
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ValueError("MQTT consumer port must be an integer from 1 to 65535")
+        if not isinstance(tls, bool):
+            raise TypeError("MQTT consumer TLS flag must be a boolean")
+        if ca_file and not tls:
+            raise ValueError("MQTT consumer CA file requires TLS")
+
         self.close_consumer()
         self.__auth = {"username": user, "password": password}
         self.__topic_name = topic
         self.__host = host
+        self.__port = port
+        self.__tls = tls
+        self.__ca_file = ca_file
         self.__consumer_state = _MqttConsumerState(client_id=self._build_consumer_client_id(topic, host))
 
     def _build_consumer_client_id(self, topic: str, host: str) -> str:
@@ -182,6 +206,8 @@ class MqttHandler:
             clean_session=False,
             username=self.__auth["username"],
             password=self.__auth["password"],
+            tls=self.__tls,
+            ca_file=self.__ca_file,
         )
         client.enable_logger(logger)
         client.on_connect = self._on_connect
@@ -279,7 +305,7 @@ class MqttHandler:
             state.connected = False
             error: Exception
             try:
-                result = client.connect(self.__host, keepalive=25) if initial else client.reconnect()
+                result = client.connect(self.__host, port=self.__port, keepalive=25) if initial else client.reconnect()
                 if result == mqtt.MQTT_ERR_SUCCESS:
                     # Re-runs connect handshake; _on_connect re-subscribes on every connect
                     self._wait_for_connection(client, deadline=deadline)
