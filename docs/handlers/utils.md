@@ -90,10 +90,12 @@ certificate must cover every advertised broker hostname; hostname validation
 stays enabled. Only explicitly opted-in handlers use these settings, for
 consumers, producers, and offset reads. Never opt a tenant-selected Kafka
 subscriber into platform credentials.
-Missing credentials or CA configuration raise an error before a Kafka client
-connects. `SASL_PLAINTEXT` is not accepted.
+Platform handlers require an explicit `SASL_SSL` protocol and complete
+credentials and CA configuration before connecting.
 
 MQTT consume envelope (typed by `MqttConsumedMessage`) mirrors the same pattern with MQTT-specific metadata fields.
+If MQTT transport settings fail validation during reconfiguration, the previous
+consumer stays active. Call `close_consumer()` to stop it explicitly.
 
 ## Known Constraints and Edge Cases
 - DB `insert_tsdb` falls back to linear inserts on `IntegrityError` and resets session on generic failures.

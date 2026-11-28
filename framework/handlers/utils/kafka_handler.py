@@ -27,6 +27,7 @@ MAX_POLL_INTERVAL_MS = int(os.environ.get("KAFKA_MAX_POLL_INTERVAL_MS", "600000"
 
 
 class KafkaHandler:
+    _use_env_security: bool = False
     __topic_name: str | None = None
     __producer: KafkaProducer | None = None
     __consumer: KafkaConsumer | None = None
@@ -41,13 +42,9 @@ class KafkaHandler:
     def _client_security_options(self) -> dict[str, Any]:
         if not self._use_env_security:
             return {}
-        protocol = os.environ.get("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip().upper()
-        if protocol == "PLAINTEXT":
-            if os.environ.get("KAFKA_SASL_USERNAME") or os.environ.get("KAFKA_SASL_PASSWORD"):
-                raise ValueError("Kafka SASL credentials require KAFKA_SECURITY_PROTOCOL=SASL_SSL")
-            return {}
+        protocol = os.environ.get("KAFKA_SECURITY_PROTOCOL", "").strip().upper()
         if protocol != "SASL_SSL":
-            raise ValueError("KAFKA_SECURITY_PROTOCOL must be PLAINTEXT or SASL_SSL")
+            raise ValueError("Platform Kafka clients require KAFKA_SECURITY_PROTOCOL=SASL_SSL")
 
         mechanism = os.environ.get("KAFKA_SASL_MECHANISM", "PLAIN").strip().upper()
         if mechanism not in {"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"}:

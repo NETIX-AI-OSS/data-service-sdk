@@ -66,7 +66,11 @@ class MqttHandler:
         tls: bool = False,
         ca_file: str | None = None,
     ) -> None:
-        """Configure transport for this consumer; verified TLS is opt-in per connection."""
+        """Configure a consumer connection after validating its transport settings.
+
+        Validation errors leave the previous consumer running. Call
+        close_consumer explicitly to stop it.
+        """
         if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise ValueError("MQTT consumer port must be an integer from 1 to 65535")
         if not isinstance(tls, bool):
